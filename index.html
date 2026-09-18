@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vite App</title>
+
+    <!-- Correção de bug de SVG do Mercado Pago -->
+    <script>
+      (function () {
+        var originalSetAttribute = Element.prototype.setAttribute;
+        Element.prototype.setAttribute = function (name, value) {
+          if (
+            (name === 'width' || name === 'height') &&
+            (value === '' || value === null || value === undefined) &&
+            this.tagName &&
+            this.tagName.toLowerCase() === 'svg'
+          ) {
+            return originalSetAttribute.call(this, name, '100%');
+          }
+          return originalSetAttribute.call(this, name, value);
+        };
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
