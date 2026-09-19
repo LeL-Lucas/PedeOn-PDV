@@ -544,19 +544,6 @@ const processOrderAndPayment = async (
 
 
 
-  /*
-   ===============================
-   CORREÇÃO MERCADO PAGO
-   ===============================
-
-   selectedPaymentMethod = credit_card
-   NÃO serve para API
-
-   formData.payment_method_id = master/visa/elo
-   É o correto
-  */
-
-
   const payload = {
 
 
@@ -908,6 +895,9 @@ const executeOrderFlow = async (
   createdOrderId.value =
     data.id
 
+  // GRAVA NO CELULAR O ID E AVISA O COMPONENTE DE STATUS WIDGET
+  localStorage.setItem('active_order_id', data.id)
+  window.dispatchEvent(new CustomEvent('order-created'))
 
 
   cartStore.clearCart()

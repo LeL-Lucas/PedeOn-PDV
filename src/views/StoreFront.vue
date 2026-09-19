@@ -1276,4 +1276,18 @@ onMounted(async () => {
   .add-button svg { width: 14px; height: 14px; }
 }
 
+/* AJUSTE DE POSIÇÃO DO WIDGET DE STATUS PARA NÃO COBRIR O CARRINHO */
+:deep(.floating-container) {
+  bottom: 84px !important;
+  z-index: 70 !important;
+}
+
+@media (max-width: 480px) {
+  :deep(.floating-container) {
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    bottom: 84px !important;
+  }
+}
 </style>
