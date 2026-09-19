@@ -459,6 +459,8 @@ const processOrderAndPayment = async (
 const executeOrderFlow = async (
   mpPaymentData: Record<string, any>
 ) => {
+  const isApproved = mpPaymentData.status === 'approved'
+
   const { data, error } = await supabase
     .from('orders')
     .insert([{
@@ -470,7 +472,7 @@ const executeOrderFlow = async (
       total: cartStore.totalAmount,
       payment_method: mpPaymentData.payment_method_id,
       mercado_pago_id: String(mpPaymentData.id),
-      status: mpPaymentData.status === 'approved' ? 'recebido' : 'aguardando_pagamento',
+      status: isApproved ? 'recebido' : 'aguardando_pagamento',
       preparation_time: '30',
       pix_qr_code: pixData.value?.qrCode || null,
       pix_qr_code_base64: pixData.value?.qrCodeBase64 || null
@@ -482,25 +484,29 @@ const executeOrderFlow = async (
 
   createdOrderId.value = data.id
 
-  // 👉 DISPARO AUTOMÁTICO DA IMPRESSORA (Utilizando o domínio fixo do Ngrok)
-  try {
-    await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        storeName: props.store?.name || 'Purple Açaí',
-        type: 'receipt',
-        order: {
-          ...data,
-          items: cartStore.items
-        }
+  // 👉 SÓ DISPARA A IMPRESSÃO SE O PAGAMENTO ESTIVER APROVADO DE FACTO
+  if (isApproved || data.status === 'recebido') {
+    try {
+      await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          storeName: props.store?.name || 'Purple Açaí',
+          type: 'receipt',
+          order: {
+            ...data,
+            items: cartStore.items
+          }
+        })
       })
-    })
-    console.log('✅ Impressão automática disparada com sucesso!')
-  } catch (printErr) {
-    console.warn('⚠️ Servidor de impressão local offline no momento:', printErr)
+      console.log('✅ Pagamento aprovado! Impressora automática disparada com sucesso!')
+    } catch (printErr) {
+      console.warn('⚠️ Servidor de impressão local offline no momento:', printErr)
+    }
+  } else {
+    console.log('⏳ Pedido gerado com pagamento pendente (Pix). A impressora não será acionada agora.')
   }
 
   localStorage.setItem('active_order_id', data.id)
