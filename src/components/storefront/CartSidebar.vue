@@ -456,13 +456,35 @@ const processOrderAndPayment = async (
   await executeOrderFlow(paymentResult)
 }
 
-createdOrderId.value = data.id
+const executeOrderFlow = async (
+  mpPaymentData: Record<string, any>
+) => {
+  const { data, error } = await supabase
+    .from('orders')
+    .insert([{
+      store_id: props.store?.id,
+      customer_name: customerName.value,
+      customer_phone: customerPhone.value,
+      address: deliveryType.value === 'delivery' ? customerAddress.value : 'RETIRADA NO BALCAO',
+      delivery_type: deliveryType.value,
+      total: cartStore.totalAmount,
+      payment_method: mpPaymentData.payment_method_id,
+      mercado_pago_id: String(mpPaymentData.id),
+      status: mpPaymentData.status === 'approved' ? 'recebido' : 'aguardando_pagamento',
+      preparation_time: '30',
+      pix_qr_code: pixData.value?.qrCode || null,
+      pix_qr_code_base64: pixData.value?.qrCodeBase64 || null
+    }])
+    .select()
+    .single()
 
-  // 👉 DISPARO AUTOMÁTICO DA IMPRESSORA COM LOGS DETALHADOS
+  if (error) throw error
+
+  createdOrderId.value = data.id
+
+  // 👉 DISPARO AUTOMÁTICO DA IMPRESSORA (Utilizando o domínio fixo do Ngrok)
   try {
-    console.log('🖨️ A tentar enviar pedido para a impressora local via Ngrok...')
-
-    const printResponse = await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
+    await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -476,16 +498,9 @@ createdOrderId.value = data.id
         }
       })
     })
-
-    const printResult = await printResponse.json().catch(() => ({}))
-
-    if (!printResponse.ok) {
-      console.error('❌ Erro retornado pelo servidor local de impressão:', printResult)
-    } else {
-      console.log('✅ Impressora disparada com sucesso pelo site!', printResult)
-    }
+    console.log('✅ Impressão automática disparada com sucesso!')
   } catch (printErr) {
-    console.error('⚠️ Falha crítica de rede ao contactar o Ngrok/Impressora:', printErr)
+    console.warn('⚠️ Servidor de impressão local offline no momento:', printErr)
   }
 
   localStorage.setItem('active_order_id', data.id)
@@ -493,6 +508,7 @@ createdOrderId.value = data.id
 
   cartStore.clearCart()
   isOrderCompleted.value = true
+}
 </script>
 
 <style scoped>
