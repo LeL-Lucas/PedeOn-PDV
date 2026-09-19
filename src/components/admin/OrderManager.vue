@@ -46,7 +46,8 @@
           <div class="order-card-top">
             <div class="order-number">
               <span>Pedido</span>
-              <strong>#{{ order.code || order.order_number || (order.id ? order.id.toString().slice(0, 5) : '---') }}</strong>
+              <strong>#{{ order.code || order.order_number || (order.id ? order.id.toString().slice(0, 5) : '---')
+                }}</strong>
             </div>
 
             <div class="order-top-meta">
@@ -97,24 +98,16 @@
             <p>{{ order.notes }}</p>
           </div>
 
-          <div
-            v-if="order.status !== 'concluido' && order.status !== 'cancelado'"
-            class="prep-box"
-          >
+          <div v-if="order.status !== 'concluido' && order.status !== 'cancelado'" class="prep-box">
             <div>
               <span class="info-label">Tempo estimado</span>
               <strong>Preparo</strong>
             </div>
 
             <label class="prep-input-wrap">
-              <input
-                type="number"
-                v-model.number="order.prep_time"
-                @change="updatePrepTime(order.id, order.prep_time || 0)"
-                min="5"
-                step="5"
-                aria-label="Tempo estimado em minutos"
-              />
+              <input type="number" v-model.number="order.prep_time"
+                @change="updatePrepTime(order.id, order.prep_time || 0)" min="5" step="5"
+                aria-label="Tempo estimado em minutos" />
               <span>min</span>
             </label>
           </div>
@@ -125,12 +118,9 @@
               <span class="status-hint">A alteração é salva automaticamente</span>
             </div>
 
-            <select
-              v-model="order.status"
-              @change="handleStatusChange(order)"
+            <select v-model="order.status" @change="handleStatusChange(order)"
               :disabled="order.status === 'concluido' || order.status === 'cancelado'"
-              :class="['status-select', order.status]"
-            >
+              :class="['status-select', order.status]">
               <option value="pendente">Pendente</option>
               <option value="preparo">Em preparo</option>
               <option value="saiu">Saiu p/ entrega</option>
@@ -174,7 +164,8 @@
         <header class="modal-header">
           <div>
             <span class="modal-kicker">Detalhes do pedido</span>
-            <h3>#{{ selectedOrder?.code || selectedOrder?.order_number || selectedOrder?.id?.toString().slice(0, 5) }}</h3>
+            <h3>#{{ selectedOrder?.code || selectedOrder?.order_number || selectedOrder?.id?.toString().slice(0, 5) }}
+            </h3>
           </div>
 
           <button class="close-button" @click="closeModal" aria-label="Fechar">
@@ -202,7 +193,8 @@
                   <strong>{{ item.quantity || item.qtd || item.qnt || 1 }}×</strong>
                   <span>{{ item.name || item.title || item.nome || item.product_name || 'Produto' }}</span>
                 </div>
-                <strong>R$ {{ (Number(item.price || item.valor || 0) * Number(item.quantity || item.qtd || item.qnt || 1)).toFixed(2) }}</strong>
+                <strong>R$ {{ (Number(item.price || item.valor || 0) * Number(item.quantity || item.qtd || item.qnt ||
+                  1)).toFixed(2) }}</strong>
               </div>
 
               <div v-if="hasComplements(item)" class="modal-complements">
@@ -343,11 +335,12 @@ const fetchOrders = async () => {
   errorMessage.value = ''
 
   try {
-    // 1. Busca os pedidos da loja
+    // 1. Busca os pedidos da loja (filtrando para ignorar os que estão aguardando pagamento)
     const { data: fetchedOrders, error: ordersError } = await supabase
       .from('orders')
       .select('*')
       .eq('store_id', props.storeId)
+      .neq('status', 'AGUARDANDO_PAGAMENTO')
       .order('created_at', { ascending: false })
 
     if (ordersError) {
@@ -605,7 +598,7 @@ onUnmounted(() => {
   padding: 0 16px;
   border: 1px solid #d9d8d3;
   border-radius: 12px;
-  background: rgba(255,255,255,.8);
+  background: rgba(255, 255, 255, .8);
   color: #2c2c28;
   font-size: .86rem;
   font-weight: 700;
@@ -615,10 +608,13 @@ onUnmounted(() => {
 .refresh-button:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: #c8c6bf;
-  box-shadow: 0 8px 22px rgba(23,23,22,.07);
+  box-shadow: 0 8px 22px rgba(23, 23, 22, .07);
 }
 
-.refresh-button:disabled { opacity: .55; cursor: wait; }
+.refresh-button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
 
 .refresh-button svg {
   width: 17px;
@@ -640,7 +636,7 @@ onUnmounted(() => {
   padding: 0 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: rgba(255,255,255,.65);
+  background: rgba(255, 255, 255, .65);
   color: #66655e;
   font-size: .82rem;
   font-weight: 600;
@@ -658,7 +654,7 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
   background: #27a45d;
-  box-shadow: 0 0 0 4px rgba(39,164,93,.1);
+  box-shadow: 0 0 0 4px rgba(39, 164, 93, .1);
 }
 
 .ops-divider {
@@ -687,14 +683,14 @@ onUnmounted(() => {
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--surface);
-  box-shadow: 0 8px 30px rgba(26,26,22,.045);
+  box-shadow: 0 8px 30px rgba(26, 26, 22, .045);
   transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
 }
 
 .order-card:hover {
   transform: translateY(-2px);
   border-color: #dcdad3;
-  box-shadow: 0 18px 42px rgba(26,26,22,.08);
+  box-shadow: 0 18px 42px rgba(26, 26, 22, .08);
 }
 
 .order-card-top {
@@ -1001,7 +997,7 @@ onUnmounted(() => {
   margin-bottom: 7px;
 }
 
-.status-section-head > span:first-child {
+.status-section-head>span:first-child {
   color: #46453f;
   font-size: .72rem;
   font-weight: 800;
@@ -1031,14 +1027,28 @@ onUnmounted(() => {
 
 .status-select:focus {
   border-color: #aaa79e;
-  box-shadow: 0 0 0 3px rgba(0,0,0,.04);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, .04);
 }
 
-.status-select.pendente { background: #fffcf4; }
-.status-select.preparo { background: #f8fcff; }
-.status-select.saiu { background: #faf7ff; }
-.status-select.concluido { background: #f7fcf8; }
-.status-select.cancelado { background: #fff9f8; }
+.status-select.pendente {
+  background: #fffcf4;
+}
+
+.status-select.preparo {
+  background: #f8fcff;
+}
+
+.status-select.saiu {
+  background: #faf7ff;
+}
+
+.status-select.concluido {
+  background: #f7fcf8;
+}
+
+.status-select.cancelado {
+  background: #fff9f8;
+}
 
 .status-select:disabled {
   opacity: .75;
@@ -1055,13 +1065,13 @@ onUnmounted(() => {
   border-top: 1px solid #efeee8;
 }
 
-.order-card-footer > div {
+.order-card-footer>div {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.order-card-footer > div span {
+.order-card-footer>div span {
   color: #9b998f;
   font-size: .67rem;
   font-weight: 800;
@@ -1069,7 +1079,7 @@ onUnmounted(() => {
   letter-spacing: .08em;
 }
 
-.order-card-footer > div strong {
+.order-card-footer>div strong {
   font-family: 'Manrope', sans-serif;
   font-size: 1.18rem;
   letter-spacing: -.04em;
@@ -1116,7 +1126,7 @@ onUnmounted(() => {
   padding: 40px 24px;
   border: 1px dashed #dcdad2;
   border-radius: 20px;
-  background: rgba(255,255,255,.5);
+  background: rgba(255, 255, 255, .5);
   text-align: center;
 }
 
@@ -1189,7 +1199,7 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(20,20,18,.38);
+  background: rgba(20, 20, 18, .38);
   backdrop-filter: blur(8px);
 }
 
@@ -1199,10 +1209,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,.7);
+  border: 1px solid rgba(255, 255, 255, .7);
   border-radius: 22px;
   background: #fff;
-  box-shadow: 0 26px 80px rgba(0,0,0,.2);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .2);
 }
 
 .modal-header {
@@ -1265,7 +1275,7 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 
-.modal-customer > div:last-child {
+.modal-customer>div:last-child {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1303,7 +1313,7 @@ onUnmounted(() => {
   font-size: .86rem;
 }
 
-.modal-item-main > strong {
+.modal-item-main>strong {
   white-space: nowrap;
 }
 
@@ -1339,13 +1349,13 @@ onUnmounted(() => {
   background: #fcfcfa;
 }
 
-.modal-footer > div {
+.modal-footer>div {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.modal-footer > div span {
+.modal-footer>div span {
   color: #99968d;
   font-size: .66rem;
   font-weight: 800;
@@ -1353,7 +1363,7 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.modal-footer > div strong {
+.modal-footer>div strong {
   font-family: 'Manrope', sans-serif;
   font-size: 1.15rem;
   letter-spacing: -.03em;
@@ -1370,7 +1380,9 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 1050px) {
