@@ -459,7 +459,9 @@ const processOrderAndPayment = async (
 const executeOrderFlow = async (
   mpPaymentData: Record<string, any>
 ) => {
+  // Verifica se o pagamento foi aprovado (cartão) ou se é Pix gerado com sucesso
   const isApproved = mpPaymentData.status === 'approved'
+  const isPix = mpPaymentData.payment_method_id === 'pix'
 
   const { data, error } = await supabase
     .from('orders')
@@ -484,8 +486,9 @@ const executeOrderFlow = async (
 
   createdOrderId.value = data.id
 
-  // 👉 SÓ DISPARA A IMPRESSÃO SE O PAGAMENTO ESTIVER APROVADO DE FACTO
-  if (isApproved || data.status === 'recebido') {
+  // 👉 SÓ IMPRIME SE FOR CARTÃO APROVADO OU SE QUISER QUE O PIX IMPRIMA APÓS GERar O QR CODE
+  // (Se preferir que o Pix só imprima após o dinheiro cair de fato, alteramos para disparar via Webhook do Supabase)
+  if (isApproved) {
     try {
       await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
         method: 'POST',
@@ -501,12 +504,12 @@ const executeOrderFlow = async (
           }
         })
       })
-      console.log('✅ Pagamento aprovado! Impressora automática disparada com sucesso!')
+      console.log('✅ Pagamento com cartão aprovado! Impressora acionada.')
     } catch (printErr) {
-      console.warn('⚠️ Servidor de impressão local offline no momento:', printErr)
+      console.warn('⚠️ Erro ao imprimir:', printErr)
     }
   } else {
-    console.log('⏳ Pedido gerado com pagamento pendente (Pix). A impressora não será acionada agora.')
+    console.log('⏳ Pagamento via Pix pendente. O pedido foi guardado como aguardando pagamento.')
   }
 
   localStorage.setItem('active_order_id', data.id)
