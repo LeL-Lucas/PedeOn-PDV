@@ -1,20 +1,20 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { supabase } from '@/services/supabase'
 
+// 1. Declaramos as views no topo para o empacotador não se esquecer do CSS
+const StoreFrontView = () => import('@/views/StoreFront.vue')
+const StoreSelectorView = () => import('@/views/StoreSelector.vue')
+
+// 2. Verificamos o domínio logo na inicialização
+const host = window.location.hostname
+const isCustomDomain = host === 'purpleacai.com.br' || host === 'www.purpleacai.com.br'
+
 const routes: Array<RouteRecordRaw> = [
   // Seleção de Comércios OU Vitrine (Dependendo do Domínio)
   {
     path: '/',
     name: 'Home',
-    component: () => {
-      const host = window.location.hostname
-      // Se aceder pelo domínio próprio do açaí, carrega a vitrine diretamente
-      if (host === 'purpleacai.com.br' || host === 'www.purpleacai.com.br') {
-        return import('@/views/StoreFront.vue')
-      }
-      // Caso contrário (ex: link da vercel), carrega o painel de seleção de lojas
-      return import('@/views/StoreSelector.vue')
-    }
+    component: isCustomDomain ? StoreFrontView : StoreSelectorView
   },
 
   // Tela de Login
@@ -59,7 +59,7 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/s/:slug',
     name: 'StoreFront',
-    component: () => import('@/views/StoreFront.vue'),
+    component: StoreFrontView,
     props: true
   },
 
@@ -81,7 +81,7 @@ const router = createRouter({
   routes
 })
 
-// Guard de Autenticação (Sintaxe moderna Vue Router 4)
+// Guard de Autenticação
 router.beforeEach(async (to) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
 
