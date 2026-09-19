@@ -46,7 +46,7 @@
             </div>
           </div>
 
-          <!-- BOTÃO MOSTRAR PEDIDO / CARRINHO -->
+          <!-- BOTÃO MOSTRAR PEDIDO / CARRINHO (DESKTOP) -->
           <button
             class="cart-button"
             type="button"
@@ -111,7 +111,7 @@
         </div>
       </section>
 
-      <!-- SEÇÃO DO CARDÁPIO E NAVEGAÇÃO (GRID COM PRÉVIA NO DESKTOP) -->
+      <!-- SEÇÃO DO CARDÁPIO E NAVEGAÇÃO -->
       <main class="page-shell main-content">
         <div class="layout-grid">
           <!-- COLUNA DO CARDÁPIO -->
@@ -175,6 +175,11 @@
                     </div>
 
                     <div class="product-bottom">
+                      <div class="product-price" aria-label="Preço">
+                        <small>A partir de</small>
+                        <strong>R$ {{ Number(product.price || 0).toFixed(2).replace('.', ',') }}</strong>
+                      </div>
+
                       <button
                         type="button"
                         class="add-button"
@@ -186,11 +191,6 @@
                         </svg>
                         <span>Adicionar</span>
                       </button>
-
-                      <div class="product-price" aria-label="Preço">
-                        <small>A partir de</small>
-                        <strong>R$ {{ Number(product.price || 0).toFixed(2).replace('.', ',') }}</strong>
-                      </div>
                     </div>
                   </div>
 
@@ -206,7 +206,7 @@
             </section>
           </div>
 
-          <!-- COLUNA DE PRÉVIA DO PEDIDO (VISÍVEL APENAS EM TELAS GRANDES) -->
+          <!-- COLUNA DE PRÉVIA DO PEDIDO (DESKTOP) -->
           <aside class="cart-preview-column">
             <div class="cart-preview-card">
               <div class="preview-header">
@@ -248,7 +248,7 @@
         </div>
       </main>
 
-      <!-- BARRA FLUTUANTE MOBILE -->
+      <!-- BARRA FLUTUANTE MOBILE (CARRINHO) -->
       <button
         v-if="cartTotalItems > 0"
         type="button"
@@ -257,17 +257,17 @@
       >
         <span class="mobile-cart-left">
           <span class="mobile-cart-count">{{ cartTotalItems }}</span>
-          <span>{{ cartTotalItems === 1 ? '1 item no pedido' : `${cartTotalItems} itens no pedido` }}</span>
+          <span>{{ cartTotalItems === 1 ? '1 item no carrinho' : `${cartTotalItems} itens no carrinho` }}</span>
         </span>
         <span class="mobile-cart-action">
-          Mostrar pedido
+          Ver pedido
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <path d="M7 4l6 6-6 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
       </button>
 
-      <!-- MODAL DO CARRINHO (CARRINHO COMPLETO) -->
+      <!-- MODAL DO CARRINHO -->
       <CartSidebar
         v-model:isOpen="isCartOpen"
         :store="store"
@@ -301,12 +301,9 @@ const route = useRoute()
 const router = useRouter()
 const { store, fetchStoreBySlug, loading, error } = useStore()
 
-// 👉 NOVO: Descobre o slug automaticamente pelo domínio ou pela URL
 const activeSlug = computed(() => {
-  // 1. Se tiver na URL (ex: app.com/s/purpleacai), usa o da URL
   if (route.params.slug) return route.params.slug as string;
 
-  // 2. Se for a raiz do domínio personalizado, força o slug da loja
   const host = window.location.hostname;
   if (host === 'purpleacai.com.br' || host === 'www.purpleacai.com.br') {
     return 'purpleacai';
@@ -493,7 +490,6 @@ onMounted(async () => {
   object-fit: cover;
 }
 
-/* BRAND COPY E STATUS - CORRIGIDO */
 .brand-copy {
   display: flex;
   flex-direction: column;
@@ -672,7 +668,7 @@ onMounted(async () => {
   margin-right: 6px;
 }
 
-/* MAIN CONTENT & LAYOUT GRID */
+/* MAIN CONTENT */
 .main-content {
   padding-top: 36px;
 }
@@ -683,7 +679,6 @@ onMounted(async () => {
   gap: 28px;
 }
 
-/* NAVEGAÇÃO DE CATEGORIAS - CORRIGIDO */
 .category-nav {
   position: sticky;
   top: 74px;
@@ -743,31 +738,32 @@ onMounted(async () => {
   border-color: var(--ink);
 }
 
-/* PRODUCTS — DELIVERY FIRST */
- .products-grid {
+/* PRODUCTS — REFACTOR */
+.products-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 16px;
   margin-top: 18px;
 }
 
 .product-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 142px;
-  min-height: 150px;
-  overflow: hidden;
-  border: 1px solid rgba(45, 35, 25, .10);
-  border-radius: 18px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(45, 35, 25, 0.08);
+  border-radius: 20px;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 5px 18px rgba(44, 34, 25, .045);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .product-card:hover {
   transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--theme) 22%, var(--line));
-  box-shadow: 0 14px 30px rgba(44, 34, 25, .09);
+  border-color: color-mix(in srgb, var(--theme) 30%, var(--line));
+  box-shadow: 0 12px 24px rgba(44, 34, 25, 0.06);
 }
 
 .product-card:active {
@@ -775,28 +771,27 @@ onMounted(async () => {
 }
 
 .product-body {
+  flex: 1;
   min-width: 0;
-  padding: 16px 13px 14px 17px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
 }
 
 .product-copy h3 {
   margin: 0;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 1.02rem;
-  line-height: 1.28;
+  font-size: 1.05rem;
+  line-height: 1.25;
   font-weight: 800;
-  letter-spacing: -.02em;
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 
 .product-copy p {
-  margin: 7px 0 0;
-  font-size: .82rem;
-  line-height: 1.45;
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
   color: #625c55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -806,90 +801,80 @@ onMounted(async () => {
 }
 
 .product-bottom {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: end;
-  gap: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 12px;
 }
 
 .product-price {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
   gap: 1px;
-  min-width: 0;
 }
 
 .product-price small {
-  font-size: .66rem;
-  font-weight: 650;
+  font-size: 0.68rem;
+  font-weight: 600;
   color: #857b72;
 }
 
 .product-price strong {
   font-size: 1.1rem;
-  line-height: 1.05;
-  font-weight: 850;
-  letter-spacing: -.02em;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--ink);
   white-space: nowrap;
 }
 
 .add-button {
-  justify-self: start;
-  min-height: 40px;
-  padding: 0 13px;
-  border-radius: 11px;
-  border: 1px solid color-mix(in srgb, var(--theme) 28%, transparent);
-  background: var(--theme);
-  color: #fff;
-  font-weight: 800;
-  font-size: .76rem;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme) 12%, transparent);
+  color: var(--theme);
+  border: none;
+  font-weight: 700;
+  font-size: 0.8rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  box-shadow: 0 7px 17px color-mix(in srgb, var(--theme) 19%, transparent);
-  transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+  gap: 6px;
+  transition: all 160ms ease;
 }
 
 .add-button:hover:not(:disabled) {
-  filter: brightness(.96);
-  transform: translateY(-1px);
-  box-shadow: 0 10px 21px color-mix(in srgb, var(--theme) 23%, transparent);
+  background: var(--theme);
+  color: #fff;
+  transform: scale(1.03);
 }
 
 .add-button:active:not(:disabled) {
-  transform: translateY(0) scale(.98);
+  transform: scale(0.97);
 }
 
 .add-button:disabled {
-  background: #b8b1a9;
-  border-color: #b8b1a9;
-  box-shadow: none;
+  background: #f0ede9;
+  color: #b8b1a9;
   cursor: not-allowed;
 }
 
 .add-button svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
 }
 
 .product-media {
-  position: relative;
-  min-height: 150px;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+  border-radius: 14px;
   overflow: hidden;
-  background: #eee8df;
-}
-
-.product-media::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(255,255,255,.04), transparent 40%);
-  pointer-events: none;
+  background: #f4f0eb;
+  position: relative;
 }
 
 .product-media img {
@@ -897,11 +882,11 @@ onMounted(async () => {
   height: 100%;
   display: block;
   object-fit: cover;
-  transition: transform 320ms cubic-bezier(.22,.61,.36,1);
+  transition: transform 300ms ease;
 }
 
 .product-card:hover .product-media img {
-  transform: scale(1.04);
+  transform: scale(1.05);
 }
 
 /* Elegant shared modal overrides */
@@ -1117,20 +1102,65 @@ onMounted(async () => {
   opacity: 0.9;
 }
 
-/* MEDIA QUERIES PARA TELAS GRANDES */
+/* MOBILE BAR - BOTÃO FLUTUANTE ELEGANTE */
+.mobile-cart-bar {
+  display: none;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 24px;
+  z-index: 60;
+  width: calc(100% - 32px);
+  max-width: 360px;
+  padding: 14px 18px;
+  border-radius: 99px;
+  background: var(--theme);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--theme) 35%, transparent);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mobile-cart-bar:active {
+  transform: translateX(-50%) scale(0.97);
+}
+
+.mobile-cart-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mobile-cart-count {
+  background: white;
+  color: var(--theme);
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.mobile-cart-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.empty-products {
+  text-align: center;
+  padding: 48px;
+  color: var(--muted);
+}
+
 @media (min-width: 1024px) {
   .layout-grid {
     grid-template-columns: minmax(0, 1fr) 320px;
     align-items: start;
-  }
-
-  .product-card {
-    grid-template-columns: minmax(0, 1fr) 174px;
-    min-height: 160px;
-  }
-
-  .product-media {
-    min-height: 160px;
   }
 
   .cart-preview-column {
@@ -1138,37 +1168,6 @@ onMounted(async () => {
     position: sticky;
     top: 90px;
   }
-}
-
-/* MOBILE BAR */
-.mobile-cart-bar {
-  display: none;
-  position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  z-index: 60;
-  padding: 12px 18px;
-  border-radius: 18px;
-  background: var(--ink);
-  color: white;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.3);
-}
-
-.mobile-cart-count {
-  background: var(--theme);
-  padding: 2px 8px;
-  border-radius: 8px;
-  margin-right: 8px;
-  font-weight: 800;
-}
-
-.empty-products {
-  text-align: center;
-  padding: 48px;
-  color: var(--muted);
 }
 
 @media (max-width: 768px) {
@@ -1201,78 +1200,7 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
   }
-
-  .product-card {
-    grid-template-columns: minmax(0, 1fr) 112px;
-    min-height: 132px;
-    border-radius: 16px;
-  }
-
-  .product-body {
-    padding: 13px 10px 12px 14px;
-  }
-
-  .product-copy h3 {
-    font-size: .95rem;
-  }
-
-  .product-copy p {
-    font-size: .75rem;
-  }
-
-  .product-bottom {
-    gap: 8px;
-  }
-
-  .product-price {
-    align-items: flex-end;
-  }
-
-  .product-price strong {
-    font-size: .96rem;
-  }
-
-  .add-button {
-    min-height: 35px;
-    padding: 0 10px;
-    border-radius: 10px;
-    font-size: .70rem;
-  }
-
-  .product-media {
-    min-height: 132px;
-  }
-}
-
-@media (max-width: 390px) {
-  .product-card {
-    grid-template-columns: minmax(0, 1fr) 100px;
-  }
-
-  .product-copy h3 {
-    font-size: .91rem;
-  }
-
-  .add-button span {
-    display: none;
-  }
-
-  .add-button {
-    width: 36px;
-    min-width: 36px;
-    padding: 0;
-  }
-}
-
-@media (min-width: 1024px) {
-  .products-grid { gap: 16px; }
-  .product-card { grid-template-columns: minmax(0, 1fr) 172px; min-height: 178px; }
-  .product-media { min-height: 178px; }
-  .product-body { padding: 20px 18px 18px 20px; }
 }
 
 @media (max-width: 640px) {
@@ -1280,21 +1208,53 @@ onMounted(async () => {
   .hero-content { left: 20px; right: 20px; bottom: 62px; }
   .hero h1 { font-size: 2rem; line-height: 1.05; }
   .hero p { font-size: .9rem; }
+
   .products-grid { gap: 12px; }
-  .product-card { grid-template-columns: minmax(0, 1fr) 116px; min-height: 142px; border-radius: 16px; }
-  .product-media { min-height: 142px; }
-  .product-body { padding: 15px 12px 14px 15px; gap: 13px; }
-  .product-copy h3 { font-size: .96rem; }
-  .product-copy p { font-size: .79rem; line-height: 1.42; }
-  .product-price strong { font-size: 1.08rem; }
-  .add-button { min-height: 38px; padding: 0 10px; font-size: .73rem; }
-  .add-button svg { width: 14px; height: 14px; }
+  .product-card {
+    padding: 14px;
+    gap: 14px;
+    border-radius: 18px;
+  }
+  .product-media {
+    width: 100px;
+    height: 100px;
+    border-radius: 12px;
+  }
+  .product-copy h3 { font-size: 0.98rem; }
+  .product-copy p { font-size: 0.8rem; line-height: 1.35; }
+  .product-price strong { font-size: 1.05rem; }
+  .add-button {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 0.75rem;
+  }
+  .add-button svg { width: 13px; height: 13px; }
+}
+
+@media (max-width: 390px) {
+  .product-card {
+    padding: 12px;
+    gap: 12px;
+  }
+  .product-media {
+    width: 86px;
+    height: 86px;
+  }
+  .product-copy h3 { font-size: 0.92rem; }
+  .product-copy p { font-size: 0.75rem; }
+
+  .add-button span { display: none; }
+  .add-button {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
 }
 
 /* AJUSTE DE POSIÇÃO DO WIDGET DE STATUS PARA NÃO COBRIR O CARRINHO */
 :deep(.floating-container) {
-  bottom: 84px !important;
-  z-index: 70 !important;
+  bottom: 94px !important;
+  z-index: 50 !important;
 }
 
 @media (max-width: 480px) {
@@ -1302,7 +1262,7 @@ onMounted(async () => {
     left: 12px !important;
     right: 12px !important;
     width: auto !important;
-    bottom: 84px !important;
+    bottom: 94px !important;
   }
 }
 </style>
