@@ -242,15 +242,43 @@ const pixData = ref<{
 const copiedPix = ref(false)
 
 
-const closeModal = () => {
+const closeModal = async () => {
+
+  try {
+
+    if (brickController.value?.unmount) {
+
+      await brickController.value.unmount()
+
+      brickController.value = null
+
+    }
+
+  } catch(error) {
+
+    console.warn(
+      'Erro fechando Brick:',
+      error
+    )
+
+  }
+
+
   emit('update:isOpen', false)
+
   emit('close')
 
+
   setTimeout(() => {
+
     isOrderCompleted.value = false
+
     createdOrderId.value = null
+
     pixData.value = null
-  }, 300)
+
+  },300)
+
 }
 
 
@@ -430,13 +458,27 @@ const handleAfterEnter = () => {
 
 watch(
   () => props.isOpen,
-  (value) => {
+  async (value) => {
 
     if (!value && brickController.value) {
 
-      brickController.value
-        .unmount()
-        .catch(() => {})
+      try {
+
+        if (brickController.value.unmount) {
+
+          await brickController.value.unmount()
+
+        }
+
+      } catch(error) {
+
+        console.warn(
+          'Erro ao desmontar Mercado Pago Brick:',
+          error
+        )
+
+      }
+
 
       brickController.value = null
 
@@ -467,7 +509,6 @@ onBeforeUnmount(async () => {
 // PAGAMENTO
 // ==============================
 
-console.log("PAYLOAD FINAL ENVIADO:", payload)
 const processOrderAndPayment = async (
   selectedPaymentMethod: string,
   formData: Record<string, any>
@@ -503,75 +544,130 @@ const processOrderAndPayment = async (
 
 
 
+  /*
+   ===============================
+   CORREÇÃO MERCADO PAGO
+   ===============================
+
+   selectedPaymentMethod = credit_card
+   NÃO serve para API
+
+   formData.payment_method_id = master/visa/elo
+   É o correto
+  */
+
+
   const payload = {
 
 
     transaction_amount:
+
       Number(cartStore.totalAmount),
 
 
+
     token:
+
       formData.token || null,
 
 
+
     payment_method_id:
-      formData.payment_method_id,
+
+      formData.payment_method_id ||
+      null,
+
 
 
     installments:
-      formData.installments || 1,
+
+      Number(
+        formData.installments || 1
+      ),
+
 
 
     issuer_id:
-  formData.issuer_id
-    ? Number(formData.issuer_id)
-    : null,
+
+      formData.issuer_id
+        ? Number(formData.issuer_id)
+        : null,
+
 
 
     payer: {
 
+
       email:
+
         formData.payer?.email ||
         'cliente@email.com',
 
 
+
       identification:
-        formData.payer?.identification || null
+
+        formData.payer?.identification ||
+        null
+
 
     },
 
 
+
     description:
+
       `Pedido ${props.store?.name || 'Loja'}`
+
 
   }
 
 
 
+
+  console.log(
+    '🚀 PAYLOAD FINAL ENVIADO:',
+    payload
+  )
+
+
+
+
+
   const res =
+
     await fetch(
 
       'https://misntxirajngjcdpqwwn.supabase.co/functions/v1/create-payment',
 
       {
 
+
         method:'POST',
+
 
         headers:{
 
-          'Content-Type':'application/json',
+
+          'Content-Type':
+            'application/json',
+
 
           'Authorization':
             `Bearer ${anonKey}`,
 
+
           'apikey':
             anonKey
+
 
         },
 
 
         body:
+
           JSON.stringify(payload)
+
 
       }
 
@@ -579,86 +675,160 @@ const processOrderAndPayment = async (
 
 
 
+
+
+
+
   const paymentResult =
+
     await res.json()
 
 
 
+
+
+
+
   console.log(
-    'Mercado Pago:',
+
+    '💳 RETORNO MERCADO PAGO:',
+
     paymentResult
+
   )
+
+
+
+
 
 
 
   if (!res.ok) {
 
+
     throw new Error(
+
+      paymentResult.message ||
+
       paymentResult.error ||
+
       'Erro pagamento'
+
     )
 
   }
 
 
 
-  // SOMENTE PIX
+
+
+
+
+  // ==========================
+  // PIX
+  // ==========================
+
 
   if (
 
-    paymentResult.payment_method_id === 'pix' &&
+
+    paymentResult.payment_method_id === 'pix'
+
+
+    &&
+
 
     paymentResult.point_of_interaction
+
       ?.transaction_data
+
 
   ) {
 
 
+
     const txData =
+
       paymentResult
-        .point_of_interaction
-        .transaction_data
+
+      .point_of_interaction
+
+      .transaction_data
+
+
 
 
 
     pixData.value = {
 
+
       qrCode:
+
         txData.qr_code,
 
 
+
       qrCodeBase64:
+
         txData.qr_code_base64
+
 
     }
 
 
+
   }
 
 
 
-  // CARTÃO SÓ APROVADO
+
+
+
+
+  // ==========================
+  // CARTÃO
+  // ==========================
+
 
   if (
 
-    selectedPaymentMethod !== 'pix' &&
+
+    selectedPaymentMethod === 'credit_card'
+
+
+    &&
+
 
     paymentResult.status !== 'approved'
 
+
   ) {
 
+
+
     throw new Error(
+
       paymentResult.status_detail ||
+
       'Pagamento não aprovado'
+
     )
 
+
   }
+
+
+
+
 
 
 
   await executeOrderFlow(
+
     paymentResult
+
   )
+
 
 
 }
