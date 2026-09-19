@@ -111,7 +111,7 @@
         </div>
       </section>
 
-      <!-- SEÇÃO DO CARDÁPIO E NAVEGAÇÃO -->
+      <!-- SEÇÃO DO CARDÁPIO E NAVEGAÇÃO (GRID COM PRÉVIA NO DESKTOP) -->
       <main class="page-shell main-content">
         <div class="layout-grid">
           <!-- COLUNA DO CARDÁPIO -->
@@ -206,7 +206,7 @@
             </section>
           </div>
 
-          <!-- COLUNA DE PRÉVIA DO PEDIDO (DESKTOP) -->
+          <!-- COLUNA DE PRÉVIA DO PEDIDO (VISÍVEL APENAS EM TELAS GRANDES) -->
           <aside class="cart-preview-column">
             <div class="cart-preview-card">
               <div class="preview-header">
@@ -267,7 +267,7 @@
         </span>
       </button>
 
-      <!-- MODAL DO CARRINHO (FINALIZAÇÃO COM SUPABASE) -->
+      <!-- MODAL DO CARRINHO (CARRINHO COMPLETO) -->
       <CartSidebar
         v-model:isOpen="isCartOpen"
         :store="store"
@@ -279,7 +279,7 @@
         @close="selectedProduct = null"
       />
 
-      <!-- WIDGET FLUTUANTE DE ACOMPANHAMENTO DE PEDIDO -->
+      <!-- WIDGET DE STATUS DO PEDIDO -->
       <OrderStatusWidget />
     </div>
   </div>
@@ -343,10 +343,7 @@ const filteredProducts = computed(() => {
 const handleProductClick = (product: Product) => {
   if (!store.value?.is_open) return
 
-  const prodAny = product as unknown as {
-    complement_groups?: unknown[]
-    options_config?: unknown[]
-  }
+  const prodAny = product as any
   const hasComplements =
     (Array.isArray(prodAny.complement_groups) && prodAny.complement_groups.length > 0) ||
     (Array.isArray(prodAny.options_config) && prodAny.options_config.length > 0)
@@ -481,6 +478,7 @@ onMounted(async () => {
   object-fit: cover;
 }
 
+/* BRAND COPY E STATUS - CORRIGIDO */
 .brand-copy {
   display: flex;
   flex-direction: column;
@@ -659,7 +657,7 @@ onMounted(async () => {
   margin-right: 6px;
 }
 
-/* MAIN CONTENT */
+/* MAIN CONTENT & LAYOUT GRID */
 .main-content {
   padding-top: 36px;
 }
@@ -670,6 +668,7 @@ onMounted(async () => {
   gap: 28px;
 }
 
+/* NAVEGAÇÃO DE CATEGORIAS - CORRIGIDO */
 .category-nav {
   position: sticky;
   top: 74px;
@@ -729,8 +728,8 @@ onMounted(async () => {
   border-color: var(--ink);
 }
 
-/* PRODUCTS */
-.products-grid {
+/* PRODUCTS — DELIVERY FIRST */
+ .products-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
@@ -742,18 +741,18 @@ onMounted(async () => {
   grid-template-columns: minmax(0, 1fr) 142px;
   min-height: 150px;
   overflow: hidden;
-  border: 1px solid rgba(45, 35, 25, 0.10);
+  border: 1px solid rgba(45, 35, 25, .10);
   border-radius: 18px;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 5px 18px rgba(44, 34, 25, 0.045);
+  box-shadow: 0 5px 18px rgba(44, 34, 25, .045);
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
 .product-card:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--theme) 22%, var(--line));
-  box-shadow: 0 14px 30px rgba(44, 34, 25, 0.09);
+  box-shadow: 0 14px 30px rgba(44, 34, 25, .09);
 }
 
 .product-card:active {
@@ -775,13 +774,13 @@ onMounted(async () => {
   font-size: 1.02rem;
   line-height: 1.28;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -.02em;
   color: var(--ink);
 }
 
 .product-copy p {
   margin: 7px 0 0;
-  font-size: 0.82rem;
+  font-size: .82rem;
   line-height: 1.45;
   color: #625c55;
   display: -webkit-box;
@@ -807,7 +806,7 @@ onMounted(async () => {
 }
 
 .product-price small {
-  font-size: 0.66rem;
+  font-size: .66rem;
   font-weight: 650;
   color: #857b72;
 }
@@ -816,7 +815,7 @@ onMounted(async () => {
   font-size: 1.1rem;
   line-height: 1.05;
   font-weight: 850;
-  letter-spacing: -0.02em;
+  letter-spacing: -.02em;
   color: var(--ink);
   white-space: nowrap;
 }
@@ -830,7 +829,7 @@ onMounted(async () => {
   background: var(--theme);
   color: #fff;
   font-weight: 800;
-  font-size: 0.76rem;
+  font-size: .76rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -841,13 +840,13 @@ onMounted(async () => {
 }
 
 .add-button:hover:not(:disabled) {
-  filter: brightness(0.96);
+  filter: brightness(.96);
   transform: translateY(-1px);
   box-shadow: 0 10px 21px color-mix(in srgb, var(--theme) 23%, transparent);
 }
 
 .add-button:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
+  transform: translateY(0) scale(.98);
 }
 
 .add-button:disabled {
@@ -874,7 +873,7 @@ onMounted(async () => {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), transparent 40%);
+  background: linear-gradient(90deg, rgba(255,255,255,.04), transparent 40%);
   pointer-events: none;
 }
 
@@ -883,11 +882,101 @@ onMounted(async () => {
   height: 100%;
   display: block;
   object-fit: cover;
-  transition: transform 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: transform 320ms cubic-bezier(.22,.61,.36,1);
 }
 
 .product-card:hover .product-media img {
   transform: scale(1.04);
+}
+
+/* Elegant shared modal overrides */
+:deep(.modal-overlay),
+:deep(.overlay),
+:deep(.dialog-overlay),
+:deep(.backdrop) {
+  background: rgba(24, 18, 13, .54) !important;
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+:deep(.modal),
+:deep(.modal-card),
+:deep(.dialog),
+:deep(.drawer),
+:deep(.panel) {
+  border: 1px solid rgba(40, 31, 23, .10) !important;
+  border-radius: 24px !important;
+  background: #fffdfa !important;
+  box-shadow: 0 28px 80px rgba(27, 20, 14, .20) !important;
+}
+
+:deep(.modal-header),
+:deep(.modal-head),
+:deep(.dialog-header) {
+  border-bottom-color: #ebe3da !important;
+}
+
+:deep(.close),
+:deep(.close-btn),
+:deep(.modal-close) {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 11px !important;
+  border: 1px solid #e8e0d7 !important;
+  background: #fff !important;
+  color: #2d2823 !important;
+  font-weight: 800 !important;
+  transition: .18s ease !important;
+}
+
+:deep(.close:hover),
+:deep(.close-btn:hover),
+:deep(.modal-close:hover) {
+  background: #f5efe8 !important;
+  border-color: #d9cfc4 !important;
+  transform: translateY(-1px);
+}
+
+:deep(.primary-btn),
+:deep(.confirm-btn),
+:deep(.submit-btn),
+:deep(.checkout-btn) {
+  min-height: 48px !important;
+  border-radius: 13px !important;
+  background: var(--theme) !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+  border: 0 !important;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--theme) 20%, transparent) !important;
+}
+
+:deep(.secondary-btn),
+:deep(.cancel-btn) {
+  min-height: 46px !important;
+  border-radius: 13px !important;
+  background: #fff !important;
+  color: #2d2823 !important;
+  border: 1px solid #e3dbd2 !important;
+  font-weight: 750 !important;
+}
+
+:deep(input),
+:deep(textarea),
+:deep(select) {
+  min-height: 46px;
+  border: 1px solid #dcd4ca !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  color: #27221e !important;
+  font-size: .9rem !important;
+}
+
+:deep(input:focus),
+:deep(textarea:focus),
+:deep(select:focus) {
+  outline: none !important;
+  border-color: var(--theme) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--theme) 12%, transparent) !important;
 }
 
 /* PRÉVIA DO PEDIDO (DESKTOP) */
@@ -1013,47 +1102,7 @@ onMounted(async () => {
   opacity: 0.9;
 }
 
-/* BARRA FLUTUANTE MOBILE */
-.mobile-cart-bar {
-  display: none;
-  position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  z-index: 60;
-  padding: 12px 18px;
-  border-radius: 18px;
-  background: var(--ink);
-  color: white;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-}
-
-.mobile-cart-count {
-  background: var(--theme);
-  padding: 2px 8px;
-  border-radius: 8px;
-  margin-right: 8px;
-  font-weight: 800;
-}
-
-/* AJUSTE DE POSIÇÃO DO WIDGET DE STATUS PARA NÃO COBRIR O CARRINHO */
-:deep(.status-widget) {
-  bottom: 84px !important;
-  z-index: 70 !important;
-}
-
-@media (max-width: 480px) {
-  :deep(.status-widget) {
-    left: 12px !important;
-    right: 12px !important;
-    width: auto !important;
-    bottom: 84px !important;
-  }
-}
-
-/* MEDIA QUERIES */
+/* MEDIA QUERIES PARA TELAS GRANDES */
 @media (min-width: 1024px) {
   .layout-grid {
     grid-template-columns: minmax(0, 1fr) 320px;
@@ -1074,10 +1123,37 @@ onMounted(async () => {
     position: sticky;
     top: 90px;
   }
+}
 
-  :deep(.status-widget) {
-    bottom: 24px !important;
-  }
+/* MOBILE BAR */
+.mobile-cart-bar {
+  display: none;
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 60;
+  padding: 12px 18px;
+  border-radius: 18px;
+  background: var(--ink);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+}
+
+.mobile-cart-count {
+  background: var(--theme);
+  padding: 2px 8px;
+  border-radius: 8px;
+  margin-right: 8px;
+  font-weight: 800;
+}
+
+.empty-products {
+  text-align: center;
+  padding: 48px;
+  color: var(--muted);
 }
 
 @media (max-width: 768px) {
@@ -1126,11 +1202,11 @@ onMounted(async () => {
   }
 
   .product-copy h3 {
-    font-size: 0.95rem;
+    font-size: .95rem;
   }
 
   .product-copy p {
-    font-size: 0.75rem;
+    font-size: .75rem;
   }
 
   .product-bottom {
@@ -1142,14 +1218,14 @@ onMounted(async () => {
   }
 
   .product-price strong {
-    font-size: 0.96rem;
+    font-size: .96rem;
   }
 
   .add-button {
     min-height: 35px;
     padding: 0 10px;
     border-radius: 10px;
-    font-size: 0.70rem;
+    font-size: .70rem;
   }
 
   .product-media {
@@ -1163,7 +1239,7 @@ onMounted(async () => {
   }
 
   .product-copy h3 {
-    font-size: 0.91rem;
+    font-size: .91rem;
   }
 
   .add-button span {
@@ -1176,4 +1252,28 @@ onMounted(async () => {
     padding: 0;
   }
 }
+
+@media (min-width: 1024px) {
+  .products-grid { gap: 16px; }
+  .product-card { grid-template-columns: minmax(0, 1fr) 172px; min-height: 178px; }
+  .product-media { min-height: 178px; }
+  .product-body { padding: 20px 18px 18px 20px; }
+}
+
+@media (max-width: 640px) {
+  .page-shell { width: min(100% - 28px, 1180px); }
+  .hero-content { left: 20px; right: 20px; bottom: 62px; }
+  .hero h1 { font-size: 2rem; line-height: 1.05; }
+  .hero p { font-size: .9rem; }
+  .products-grid { gap: 12px; }
+  .product-card { grid-template-columns: minmax(0, 1fr) 116px; min-height: 142px; border-radius: 16px; }
+  .product-media { min-height: 142px; }
+  .product-body { padding: 15px 12px 14px 15px; gap: 13px; }
+  .product-copy h3 { font-size: .96rem; }
+  .product-copy p { font-size: .79rem; line-height: 1.42; }
+  .product-price strong { font-size: 1.08rem; }
+  .add-button { min-height: 38px; padding: 0 10px; font-size: .73rem; }
+  .add-button svg { width: 14px; height: 14px; }
+}
+
 </style>
