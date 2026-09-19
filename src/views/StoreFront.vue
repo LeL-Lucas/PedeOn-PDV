@@ -46,7 +46,7 @@
             </div>
           </div>
 
-          <!-- BOTÃO MOSTRAR PEDIDO / CARRINHO (DESKTOP) -->
+          <!-- BOTÃO MOSTRAR PEDIDO / CARRINHO -->
           <button
             class="cart-button"
             type="button"
@@ -206,7 +206,7 @@
             </section>
           </div>
 
-          <!-- COLUNA DE PRÉVIA DO PEDIDO (DESKTOP) -->
+          <!-- COLUNA DE PRÉVIA DO PEDIDO (VISÍVEL APENAS EM TELAS GRANDES) -->
           <aside class="cart-preview-column">
             <div class="cart-preview-card">
               <div class="preview-header">
@@ -248,7 +248,7 @@
         </div>
       </main>
 
-      <!-- BARRA FLUTUANTE MOBILE (CARRINHO) -->
+      <!-- BARRA FLUTUANTE MOBILE -->
       <button
         v-if="cartTotalItems > 0"
         type="button"
@@ -257,7 +257,7 @@
       >
         <span class="mobile-cart-left">
           <span class="mobile-cart-count">{{ cartTotalItems }}</span>
-          <span>{{ cartTotalItems === 1 ? '1 item no carrinho' : `${cartTotalItems} itens no carrinho` }}</span>
+          <span>{{ cartTotalItems === 1 ? '1 item no pedido' : `${cartTotalItems} itens no pedido` }}</span>
         </span>
         <span class="mobile-cart-action">
           Ver pedido
@@ -267,7 +267,7 @@
         </span>
       </button>
 
-      <!-- MODAL DO CARRINHO -->
+      <!-- MODAL DO CARRINHO (CARRINHO COMPLETO) -->
       <CartSidebar
         v-model:isOpen="isCartOpen"
         :store="store"
@@ -679,6 +679,7 @@ onMounted(async () => {
   gap: 28px;
 }
 
+/* NAVEGAÇÃO DE CATEGORIAS */
 .category-nav {
   position: sticky;
   top: 74px;
@@ -713,6 +714,8 @@ onMounted(async () => {
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
 }
 
 .category-scroller::-webkit-scrollbar {
@@ -720,6 +723,7 @@ onMounted(async () => {
 }
 
 .category-link {
+  flex-shrink: 0;
   padding: 0.6rem 1rem;
   border: 1px solid var(--line);
   border-radius: 99px;
@@ -738,7 +742,7 @@ onMounted(async () => {
   border-color: var(--ink);
 }
 
-/* PRODUCTS — REFACTOR */
+/* PRODUCTS */
 .products-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -750,8 +754,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
+  gap: 18px;
+  padding: 18px;
   border: 1px solid rgba(45, 35, 25, 0.08);
   border-radius: 20px;
   background: #fff;
@@ -868,8 +872,8 @@ onMounted(async () => {
 }
 
 .product-media {
-  width: 120px;
-  height: 120px;
+  width: 130px;
+  height: 130px;
   flex-shrink: 0;
   border-radius: 14px;
   overflow: hidden;
@@ -1118,7 +1122,7 @@ onMounted(async () => {
   color: white;
   border: none;
   cursor: pointer;
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--theme) 35%, transparent);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--theme), transparent);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1157,12 +1161,12 @@ onMounted(async () => {
   color: var(--muted);
 }
 
+/* MEDIA QUERIES RESPONSIVAS */
 @media (min-width: 1024px) {
   .layout-grid {
     grid-template-columns: minmax(0, 1fr) 320px;
     align-items: start;
   }
-
   .cart-preview-column {
     display: block;
     position: sticky;
@@ -1174,42 +1178,29 @@ onMounted(async () => {
   .page-shell {
     width: min(100% - 24px, 760px);
   }
-
   .hero {
     min-height: 280px;
     border-radius: 22px;
   }
-
   .hero-content {
     left: 20px;
     right: 20px;
     bottom: 70px;
   }
-
   .hero-bottom-line {
     left: 20px;
     right: 20px;
     bottom: 18px;
   }
-
   .cart-label {
     display: none;
   }
-
   .mobile-cart-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
-}
 
-@media (max-width: 640px) {
-  .page-shell { width: min(100% - 28px, 1180px); }
-  .hero-content { left: 20px; right: 20px; bottom: 62px; }
-  .hero h1 { font-size: 2rem; line-height: 1.05; }
-  .hero p { font-size: .9rem; }
-
-  .products-grid { gap: 12px; }
   .product-card {
     padding: 14px;
     gap: 14px;
@@ -1220,34 +1211,60 @@ onMounted(async () => {
     height: 100px;
     border-radius: 12px;
   }
-  .product-copy h3 { font-size: 0.98rem; }
-  .product-copy p { font-size: 0.8rem; line-height: 1.35; }
-  .product-price strong { font-size: 1.05rem; }
+  .product-copy h3 {
+    font-size: 0.98rem;
+  }
+  .product-copy p {
+    font-size: 0.8rem;
+  }
+  .product-price strong {
+    font-size: 1.05rem;
+  }
   .add-button {
-    height: 32px;
-    padding: 0 12px;
+    min-height: 36px;
+    height: 36px;
+    padding: 0 14px;
     font-size: 0.75rem;
   }
-  .add-button svg { width: 13px; height: 13px; }
 }
 
-@media (max-width: 390px) {
+@media (max-width: 480px) {
   .product-card {
     padding: 12px;
     gap: 12px;
+    border-radius: 16px;
   }
   .product-media {
-    width: 86px;
-    height: 86px;
+    width: 85px;
+    height: 85px;
+    border-radius: 10px;
   }
-  .product-copy h3 { font-size: 0.92rem; }
-  .product-copy p { font-size: 0.75rem; }
-
-  .add-button span { display: none; }
+  .product-copy h3 {
+    font-size: 0.95rem;
+  }
+  .product-copy p {
+    font-size: 0.75rem;
+    -webkit-line-clamp: 2;
+  }
+  .product-price strong {
+    font-size: 1rem;
+  }
+  /* O Botão no telemóvel passa a ser um pequeno círculo discreto com o "+" */
   .add-button {
-    width: 32px;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
     padding: 0;
+    border-radius: 50%;
     justify-content: center;
+  }
+  .add-button span {
+    display: none;
+  }
+  .add-button svg {
+    width: 16px;
+    height: 16px;
+    margin: 0;
   }
 }
 
