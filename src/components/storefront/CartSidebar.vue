@@ -33,8 +33,7 @@
             </div>
 
             <p class="pix-instructions">
-              Abra o app do seu banco, escolha a opção <strong>Pix Copia e Cola</strong> ou <strong>Escanear QR
-                Code</strong> e finalize o pagamento.
+              Abra o app do seu banco, escolha a opção <strong>Pix Copia e Cola</strong> ou <strong>Escanear QR Code</strong> e finalize o pagamento.
             </p>
           </div>
 
@@ -83,11 +82,9 @@
                   <div class="item-bottom">
                     <strong class="item-price">R$ {{ (Number(item.price) * item.quantity).toFixed(2) }}</strong>
                     <div class="quantity-controls">
-                      <button type="button" @click="cartStore.updateQuantity(item.id, item.quantity - 1)"
-                        class="btn-qty">−</button>
+                      <button type="button" @click="cartStore.updateQuantity(item.id, item.quantity - 1)" class="btn-qty">−</button>
                       <span>{{ item.quantity }}</span>
-                      <button type="button" @click="cartStore.updateQuantity(item.id, item.quantity + 1)"
-                        class="btn-qty">+</button>
+                      <button type="button" @click="cartStore.updateQuantity(item.id, item.quantity + 1)" class="btn-qty">+</button>
                     </div>
                   </div>
                 </div>
@@ -136,8 +133,7 @@
 
               <label v-if="deliveryType === 'delivery'" class="field address-field">
                 <span>Endereço completo</span>
-                <input type="text" v-model="customerAddress" placeholder="Rua, número, bairro"
-                  :required="deliveryType === 'delivery'" />
+                <input type="text" v-model="customerAddress" placeholder="Rua, número, bairro" :required="deliveryType === 'delivery'" />
               </label>
             </div>
 
@@ -164,9 +160,7 @@
         </div>
 
         <footer v-if="cartStore.items.length > 0 && !isOrderCompleted" class="cart-footer">
-          <div class="total-copy"><span>Total do pedido</span><strong>R$ {{ (Number(cartStore.totalAmount) ||
-            0).toFixed(2)
-              }}</strong></div>
+          <div class="total-copy"><span>Total do pedido</span><strong>R$ {{ (Number(cartStore.totalAmount) || 0).toFixed(2) }}</strong></div>
         </footer>
       </section>
     </div>
@@ -241,51 +235,29 @@ const pixData = ref<{
 
 const copiedPix = ref(false)
 
-
 const closeModal = async () => {
-
   try {
-
     if (brickController.value?.unmount) {
-
       await brickController.value.unmount()
-
       brickController.value = null
-
     }
-
   } catch(error) {
-
-    console.warn(
-      'Erro fechando Brick:',
-      error
-    )
-
+    console.warn('Erro fechando Brick:', error)
   }
 
-
   emit('update:isOpen', false)
-
   emit('close')
 
-
   setTimeout(() => {
-
     isOrderCompleted.value = false
-
     createdOrderId.value = null
-
     pixData.value = null
-
-  },300)
-
+  }, 300)
 }
-
 
 const closeSuccessModal = () => {
   closeModal()
 }
-
 
 const copyPixCode = () => {
   if (pixData.value?.qrCode) {
@@ -298,87 +270,48 @@ const copyPixCode = () => {
   }
 }
 
-
 const initPaymentBrick = async () => {
-
   if (isInitializing.value) return
-
   isInitializing.value = true
 
   try {
-
     await nextTick()
-
     await new Promise(resolve => setTimeout(resolve, 250))
 
-
-    const container =
-      document.getElementById('paymentBrick_container')
-
-
+    const container = document.getElementById('paymentBrick_container')
     if (!container) return
 
-
     if (brickController.value) {
-
       try {
         await brickController.value.unmount()
       } catch {}
-
       brickController.value = null
     }
 
-
     container.innerHTML = ''
-
-
     await loadMercadoPago()
 
-
-    const mp =
-      new window.MercadoPago(
-        import.meta.env.VITE_MP_PUBLIC_KEY,
-        {
-          locale: 'pt-BR'
-        }
-      )
-
+    const mp = new window.MercadoPago(
+      import.meta.env.VITE_MP_PUBLIC_KEY,
+      { locale: 'pt-BR' }
+    )
 
     const bricksBuilder = mp.bricks()
 
-
     const settings = {
-
       initialization: {
         amount: Number(cartStore.totalAmount) || 0
       },
-
-
       customization: {
-
         paymentMethods: {
-
           creditCard: 'all',
-
           bankTransfer: 'all'
-
         }
-
       },
-
-
       callbacks: {
-
-
         onReady: () => {
-
-          console.log(
-            '✅ Mercado Pago Brick pronto'
-          )
-
+          console.log('✅ Mercado Pago Brick pronto')
         },
-
-
         onSubmit: ({
           selectedPaymentMethod,
           formData
@@ -386,124 +319,58 @@ const initPaymentBrick = async () => {
           selectedPaymentMethod: string
           formData: Record<string, any>
         }) => {
-
-
-          console.log(
-            'Método selecionado:',
-            selectedPaymentMethod
-          )
-
-
           return processOrderAndPayment(
             selectedPaymentMethod,
             formData
           )
-
         },
-
-
         onError: (error: unknown) => {
-
-          console.error(
-            'Erro Brick:',
-            error
-          )
-
+          console.error('Erro Brick:', error)
         }
-
       }
-
     }
 
-
-    brickController.value =
-      await bricksBuilder.create(
-        'payment',
-        'paymentBrick_container',
-        settings
-      )
-
-
-  } catch(error) {
-
-    console.error(
-      'Erro inicializando MP:',
-      error
+    brickController.value = await bricksBuilder.create(
+      'payment',
+      'paymentBrick_container',
+      settings
     )
-
+  } catch(error) {
+    console.error('Erro inicializando MP:', error)
   } finally {
-
     isInitializing.value = false
-
   }
-
 }
-
-
 
 const handleAfterEnter = () => {
-
-  if (
-    cartStore.items.length > 0 &&
-    !isOrderCompleted.value
-  ) {
-
+  if (cartStore.items.length > 0 && !isOrderCompleted.value) {
     initPaymentBrick()
-
   }
-
 }
-
-
 
 watch(
   () => props.isOpen,
   async (value) => {
-
     if (!value && brickController.value) {
-
       try {
-
         if (brickController.value.unmount) {
-
           await brickController.value.unmount()
-
         }
-
       } catch(error) {
-
-        console.warn(
-          'Erro ao desmontar Mercado Pago Brick:',
-          error
-        )
-
+        console.warn('Erro ao desmontar Mercado Pago Brick:', error)
       }
-
-
       brickController.value = null
-
     }
-
   }
 )
 
-
-
 onBeforeUnmount(async () => {
-
   if (brickController.value) {
-
     try {
-
       await brickController.value.unmount()
-
     } catch {}
-
   }
-
 })
-
-
 
 // ==============================
 // PAGAMENTO
@@ -513,355 +380,119 @@ const processOrderAndPayment = async (
   selectedPaymentMethod: string,
   formData: Record<string, any>
 ) => {
-
-
-  if (!customerName.value ||
-      !customerPhone.value) {
-
-    throw new Error(
-      'Preencha seus dados'
-    )
-
+  if (!customerName.value || !customerPhone.value) {
+    throw new Error('Preencha seus dados')
   }
 
-
-
-  if (
-    deliveryType.value === 'delivery' &&
-    !customerAddress.value
-  ) {
-
-    throw new Error(
-      'Informe o endereço'
-    )
-
+  if (deliveryType.value === 'delivery' && !customerAddress.value) {
+    throw new Error('Informe o endereço')
   }
 
-
-
-  const anonKey =
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-
-
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
   const payload = {
-
-
-    transaction_amount:
-
-      Number(cartStore.totalAmount),
-
-
-
-    token:
-
-      formData.token || null,
-
-
-
-    payment_method_id:
-
-      formData.payment_method_id ||
-      null,
-
-
-
-    installments:
-
-      Number(
-        formData.installments || 1
-      ),
-
-
-
-    issuer_id:
-
-      formData.issuer_id
-        ? Number(formData.issuer_id)
-        : null,
-
-
-
+    transaction_amount: Number(cartStore.totalAmount),
+    token: formData.token || null,
+    payment_method_id: formData.payment_method_id || null,
+    installments: Number(formData.installments || 1),
+    issuer_id: formData.issuer_id ? Number(formData.issuer_id) : null,
     payer: {
-
-
-      email:
-
-        formData.payer?.email ||
-        'cliente@email.com',
-
-
-
-      identification:
-
-        formData.payer?.identification ||
-        null
-
-
+      email: formData.payer?.email || 'cliente@email.com',
+      identification: formData.payer?.identification || null
     },
-
-
-
-    description:
-
-      `Pedido ${props.store?.name || 'Loja'}`
-
-
+    description: `Pedido ${props.store?.name || 'Loja'}`
   }
 
-
-
-
-  console.log(
-    '🚀 PAYLOAD FINAL ENVIADO:',
-    payload
+  const res = await fetch(
+    'https://misntxirajngjcdpqwwn.supabase.co/functions/v1/create-payment',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${anonKey}`,
+        'apikey': anonKey
+      },
+      body: JSON.stringify(payload)
+    }
   )
 
-
-
-
-
-  const res =
-
-    await fetch(
-
-      'https://misntxirajngjcdpqwwn.supabase.co/functions/v1/create-payment',
-
-      {
-
-
-        method:'POST',
-
-
-        headers:{
-
-
-          'Content-Type':
-            'application/json',
-
-
-          'Authorization':
-            `Bearer ${anonKey}`,
-
-
-          'apikey':
-            anonKey
-
-
-        },
-
-
-        body:
-
-          JSON.stringify(payload)
-
-
-      }
-
-    )
-
-
-
-
-
-
-
-  const paymentResult =
-
-    await res.json()
-
-
-
-
-
-
-
-  console.log(
-
-    '💳 RETORNO MERCADO PAGO:',
-
-    paymentResult
-
-  )
-
-
-
-
-
-
+  const paymentResult = await res.json()
 
   if (!res.ok) {
-
-
     throw new Error(
-
       paymentResult.message ||
-
       paymentResult.error ||
-
       'Erro pagamento'
-
     )
-
   }
-
-
-
-
-
-
 
   // ==========================
   // PIX
   // ==========================
-
-
   if (
-
-
-    paymentResult.payment_method_id === 'pix'
-
-
-    &&
-
-
-    paymentResult.point_of_interaction
-
-      ?.transaction_data
-
-
+    paymentResult.payment_method_id === 'pix' &&
+    paymentResult.point_of_interaction?.transaction_data
   ) {
-
-
-
-    const txData =
-
-      paymentResult
-
-      .point_of_interaction
-
-      .transaction_data
-
-
-
-
-
+    const txData = paymentResult.point_of_interaction.transaction_data
     pixData.value = {
-
-
-      qrCode:
-
-        txData.qr_code,
-
-
-
-      qrCodeBase64:
-
-        txData.qr_code_base64
-
-
+      qrCode: txData.qr_code,
+      qrCodeBase64: txData.qr_code_base64
     }
-
-
-
   }
-
-
-
-
-
-
 
   // ==========================
   // CARTÃO
   // ==========================
-
-
   if (
-
-
-    selectedPaymentMethod === 'credit_card'
-
-
-    &&
-
-
+    selectedPaymentMethod === 'credit_card' &&
     paymentResult.status !== 'approved'
-
-
   ) {
-
-
-
     throw new Error(
-
       paymentResult.status_detail ||
-
       'Pagamento não aprovado'
-
     )
-
-
   }
 
-
-
-
-
-
-
-  await executeOrderFlow(
-
-    paymentResult
-
-  )
-
-
-
+  await executeOrderFlow(paymentResult)
 }
 
+createdOrderId.value = data.id
 
+  // 👉 DISPARO AUTOMÁTICO DA IMPRESSORA COM LOGS DETALHADOS
+  try {
+    console.log('🖨️ A tentar enviar pedido para a impressora local via Ngrok...')
 
+    const printResponse = await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        storeName: props.store?.name || 'Purple Açaí',
+        type: 'receipt',
+        order: {
+          ...data,
+          items: cartStore.items
+        }
+      })
+    })
 
+    const printResult = await printResponse.json().catch(() => ({}))
 
-const executeOrderFlow = async (
-  mpPaymentData: Record<string, any>
-) => {
-  const { data, error } =
-    await supabase
-      .from('orders')
-      .insert([{
-        store_id: props.store?.id,
-        customer_name: customerName.value,
-        customer_phone: customerPhone.value,
-        address: deliveryType.value === 'delivery' ? customerAddress.value : 'RETIRADA NO BALCAO',
-        delivery_type: deliveryType.value,
-        total: cartStore.totalAmount,
-        payment_method: mpPaymentData.payment_method_id,
-        mercado_pago_id: String(mpPaymentData.id),
-        status: mpPaymentData.status === 'approved' ? 'recebido' : 'aguardando_pagamento',
-        preparation_time: '30',
-        // 👉 SALVA O PIX NO BANCO DE DADOS
-        pix_qr_code: pixData.value?.qrCode || null,
-        pix_qr_code_base64: pixData.value?.qrCodeBase64 || null
-      }])
-      .select()
-      .single()
+    if (!printResponse.ok) {
+      console.error('❌ Erro retornado pelo servidor local de impressão:', printResult)
+    } else {
+      console.log('✅ Impressora disparada com sucesso pelo site!', printResult)
+    }
+  } catch (printErr) {
+    console.error('⚠️ Falha crítica de rede ao contactar o Ngrok/Impressora:', printErr)
+  }
 
-  if(error)
-    throw error
-
-  createdOrderId.value = data.id
-
-  // GRAVA NO CELULAR O ID E AVISA O COMPONENTE DE STATUS WIDGET
   localStorage.setItem('active_order_id', data.id)
   window.dispatchEvent(new CustomEvent('order-created'))
 
   cartStore.clearCart()
-
   isOrderCompleted.value = true
-}
-
 </script>
 
 <style scoped>
