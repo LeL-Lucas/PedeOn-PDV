@@ -123,23 +123,25 @@
                 <span class="category-count">{{ filteredProducts.length }} {{ filteredProducts.length === 1 ? 'item' : 'itens' }}</span>
               </div>
 
-              <div class="category-scroller" role="tablist" aria-label="Categorias">
-                <button
-                  type="button"
-                  :class="['category-link', { active: selectedCategory === '' }]"
-                  @click="selectedCategory = ''"
-                >
-                  Todas
-                </button>
+              <div class="category-scroller-wrap">
+                <div class="category-scroller" role="tablist" aria-label="Categorias">
+                  <button
+                    type="button"
+                    :class="['category-link', { active: selectedCategory === '' }]"
+                    @click="selectedCategory = ''"
+                  >
+                    Todas
+                  </button>
 
-                <button
-                  v-for="cat in categories"
-                  :key="cat.id"
-                  :class="['category-link', { active: selectedCategory === cat.id }]"
-                  @click="selectedCategory = cat.id"
-                >
-                  {{ cat.name }}
-                </button>
+                  <button
+                    v-for="cat in categories"
+                    :key="cat.id"
+                    :class="['category-link', { active: selectedCategory === cat.id }]"
+                    @click="selectedCategory = cat.id"
+                  >
+                    {{ cat.name }}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -206,7 +208,7 @@
             </section>
           </div>
 
-          <!-- COLUNA DE PRÉVIA DO PEDIDO (VISÍVEL APENAS EM TELAS GRANDES) -->
+          <!-- COLUNA DE PRÉVIA DO PEDIDO (DESKTOP) -->
           <aside class="cart-preview-column">
             <div class="cart-preview-card">
               <div class="preview-header">
@@ -248,7 +250,7 @@
         </div>
       </main>
 
-      <!-- BARRA FLUTUANTE MOBILE -->
+      <!-- BARRA FLUTUANTE MOBILE (CARRINHO) -->
       <button
         v-if="cartTotalItems > 0"
         type="button"
@@ -257,7 +259,7 @@
       >
         <span class="mobile-cart-left">
           <span class="mobile-cart-count">{{ cartTotalItems }}</span>
-          <span>{{ cartTotalItems === 1 ? '1 item no pedido' : `${cartTotalItems} itens no pedido` }}</span>
+          <span>{{ cartTotalItems === 1 ? '1 item no carrinho' : `${cartTotalItems} itens no carrinho` }}</span>
         </span>
         <span class="mobile-cart-action">
           Ver pedido
@@ -267,7 +269,7 @@
         </span>
       </button>
 
-      <!-- MODAL DO CARRINHO (CARRINHO COMPLETO) -->
+      <!-- MODAL DO CARRINHO -->
       <CartSidebar
         v-model:isOpen="isCartOpen"
         :store="store"
@@ -679,7 +681,6 @@ onMounted(async () => {
   gap: 28px;
 }
 
-/* NAVEGAÇÃO DE CATEGORIAS */
 .category-nav {
   position: sticky;
   top: 74px;
@@ -707,6 +708,11 @@ onMounted(async () => {
   font-size: 0.75rem;
   color: var(--muted);
   font-weight: 600;
+}
+
+.category-scroller-wrap {
+  width: 100%;
+  overflow: hidden;
 }
 
 .category-scroller {
@@ -744,8 +750,8 @@ onMounted(async () => {
 
 /* PRODUCTS */
 .products-grid {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   margin-top: 18px;
 }
@@ -753,9 +759,9 @@ onMounted(async () => {
 .product-card {
   display: flex;
   flex-direction: row;
-  align-items: center;
-  gap: 18px;
-  padding: 18px;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
   border: 1px solid rgba(45, 35, 25, 0.08);
   border-radius: 20px;
   background: #fff;
@@ -872,13 +878,14 @@ onMounted(async () => {
 }
 
 .product-media {
-  width: 130px;
-  height: 130px;
+  width: 120px;
+  height: 120px;
   flex-shrink: 0;
   border-radius: 14px;
   overflow: hidden;
   background: #f4f0eb;
   position: relative;
+  align-self: center;
 }
 
 .product-media img {
@@ -1202,13 +1209,13 @@ onMounted(async () => {
   }
 
   .product-card {
-    padding: 14px;
-    gap: 14px;
-    border-radius: 18px;
+    padding: 12px;
+    gap: 12px;
+    border-radius: 16px;
   }
   .product-media {
-    width: 100px;
-    height: 100px;
+    width: 90px;
+    height: 90px;
     border-radius: 12px;
   }
   .product-copy h3 {
@@ -1220,40 +1227,11 @@ onMounted(async () => {
   .product-price strong {
     font-size: 1.05rem;
   }
-  .add-button {
-    min-height: 36px;
-    height: 36px;
-    padding: 0 14px;
-    font-size: 0.75rem;
-  }
-}
 
-@media (max-width: 480px) {
-  .product-card {
-    padding: 12px;
-    gap: 12px;
-    border-radius: 16px;
-  }
-  .product-media {
-    width: 85px;
-    height: 85px;
-    border-radius: 10px;
-  }
-  .product-copy h3 {
-    font-size: 0.95rem;
-  }
-  .product-copy p {
-    font-size: 0.75rem;
-    -webkit-line-clamp: 2;
-  }
-  .product-price strong {
-    font-size: 1rem;
-  }
-  /* O Botão no telemóvel passa a ser um pequeno círculo discreto com o "+" */
   .add-button {
-    width: 34px;
-    height: 34px;
-    min-height: 34px;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
     padding: 0;
     border-radius: 50%;
     justify-content: center;
@@ -1262,8 +1240,6 @@ onMounted(async () => {
     display: none;
   }
   .add-button svg {
-    width: 16px;
-    height: 16px;
     margin: 0;
   }
 }
