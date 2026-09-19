@@ -15,14 +15,17 @@ const corsHeaders = {
 
 
 
-Deno.serve(async (req)=>{
+Deno.serve(async (req) => {
 
 
-  if(req.method === "OPTIONS"){
+  if (req.method === "OPTIONS") {
 
-    return new Response("ok",{
-      headers:corsHeaders
-    })
+    return new Response(
+      "ok",
+      {
+        headers: corsHeaders
+      }
+    )
 
   }
 
@@ -36,61 +39,135 @@ Deno.serve(async (req)=>{
 
 
     console.log(
-      "Dados recebidos:",
+      "DADOS RECEBIDOS BRICK:",
       body
     )
 
 
 
     const accessToken =
-      Deno.env.get(
-        "MP_ACCESS_TOKEN"
+      Deno.env.get("MP_ACCESS_TOKEN")
+
+
+
+    if (!accessToken) {
+
+      throw new Error(
+        "MP_ACCESS_TOKEN ausente"
       )
+
+    }
 
 
 
     const supabase =
       createClient(
 
-        Deno.env.get(
-          "SUPABASE_URL"
-        )!,
+        Deno.env.get("SUPABASE_URL")!,
 
-        Deno.env.get(
-          "SUPABASE_SERVICE_ROLE_KEY"
-        )!
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 
       )
 
 
 
-    const pagamento = {
+
+
+    // ===================================
+    // BUSCA MÉTODOS DISPONÍVEIS DA CONTA
+    // ===================================
+
+
+    const methodsResponse =
+      await fetch(
+
+        "https://api.mercadopago.com/v1/payment_methods",
+
+        {
+
+          headers: {
+
+            Authorization:
+              `Bearer ${accessToken}`
+
+          }
+
+        }
+
+      )
+
+
+    const methods =
+      await methodsResponse.json()
+
+
+
+    console.log(
+      "MÉTODOS CARTÃO DISPONÍVEIS:",
+      Array.isArray(methods)
+      ? methods.filter(
+          (m:any)=>
+          m.payment_type_id === "credit_card"
+        )
+      : methods
+    )
+
+
+
+
+
+
+    // ===================================
+    // MONTA PAGAMENTO
+    // ===================================
+
+
+    const pagamento:any = {
 
 
       transaction_amount:
-        Number(body.transaction_amount),
+
+        Number(
+          body.transaction_amount
+        ),
+
 
 
       description:
+
         "Pedido PedeOn",
 
 
+
       payment_method_id:
-        "pix",
+
+        body.payment_method_id,
 
 
-      payer:{
+
+      payer: {
+
 
         email:
-          body.email ||
-          "cliente@email.com"
+
+          body.payer?.email ||
+
+          "cliente@email.com",
+
+
+
+        identification:
+
+          body.payer?.identification
 
       },
+
 
 
       external_reference:
 
         body.order_id ||
+
         "PEDIDO-" + Date.now()
 
 
@@ -98,41 +175,94 @@ Deno.serve(async (req)=>{
 
 
 
+
+
+
+    // CARTÃO
+
+    if(body.token){
+
+
+      pagamento.token =
+
+        body.token
+
+
+
+      pagamento.installments =
+
+        Number(
+          body.installments || 1
+        )
+
+
+
+      pagamento.issuer_id =
+
+        Number(
+          body.issuer_id
+        )
+
+
+    }
+
+
+
+
+
+
+
     console.log(
-      "Enviando Mercado Pago:",
+      "ENVIANDO PARA MERCADO PAGO:",
       pagamento
     )
 
 
 
+
+
+
+
     const response =
+
       await fetch(
 
         "https://api.mercadopago.com/v1/payments",
 
         {
 
+
           method:"POST",
+
 
           headers:{
 
 
             "Content-Type":
+
               "application/json",
 
 
+
             "Authorization":
+
               `Bearer ${accessToken}`,
 
 
+
             "X-Idempotency-Key":
+
               crypto.randomUUID()
+
 
           },
 
 
           body:
-            JSON.stringify(pagamento)
+
+            JSON.stringify(
+              pagamento
+            )
 
 
         }
@@ -141,15 +271,25 @@ Deno.serve(async (req)=>{
 
 
 
+
+
+
     const result =
+
       await response.json()
 
 
 
+
+
     console.log(
-      "Resposta Mercado Pago:",
+      "RETORNO MERCADO PAGO:",
       result
     )
+
+
+
+
 
 
 
@@ -162,35 +302,41 @@ Deno.serve(async (req)=>{
 
         {
 
+
           status:
             response.status,
 
+
           headers:{
+
             ...corsHeaders,
+
             "Content-Type":
-            "application/json"
+              "application/json"
+
           }
+
 
         }
 
       )
 
+
     }
 
 
 
-    // SALVAR PAGAMENTO NO BANCO
+
+
+
 
     const {error} =
+
       await supabase
 
       .from("payments")
 
       .insert({
-
-        order_id:
-
-          body.order_id || null,
 
 
         mercado_pago_id:
@@ -198,19 +344,23 @@ Deno.serve(async (req)=>{
           String(result.id),
 
 
+
         status:
 
           result.status,
 
 
+
         payment_method:
 
-          "pix",
+          result.payment_method_id,
+
 
 
         amount:
 
           result.transaction_amount,
+
 
 
         qr_code:
@@ -220,24 +370,34 @@ Deno.serve(async (req)=>{
           ?.qr_code,
 
 
+
         qr_code_base64:
 
           result.point_of_interaction
           ?.transaction_data
           ?.qr_code_base64
 
+
       })
+
+
+
+
 
 
 
     if(error){
 
       console.error(
-        "Erro salvando pagamento:",
+        "ERRO SALVANDO PAGAMENTO:",
         error
       )
 
     }
+
+
+
+
 
 
 
@@ -247,17 +407,26 @@ Deno.serve(async (req)=>{
 
       {
 
+
         status:200,
 
+
         headers:{
+
           ...corsHeaders,
+
           "Content-Type":
-          "application/json"
+
+            "application/json"
+
         }
+
 
       }
 
     )
+
+
 
 
 
@@ -267,9 +436,10 @@ Deno.serve(async (req)=>{
 
 
     console.error(
-      "Erro:",
+      "ERRO GERAL:",
       error
     )
+
 
 
     return new Response(
@@ -277,23 +447,36 @@ Deno.serve(async (req)=>{
       JSON.stringify({
 
         error:
-          error.message
+
+          error instanceof Error
+
+          ? error.message
+
+          : "Erro desconhecido"
 
       }),
 
       {
 
+
         status:500,
 
+
         headers:{
+
           ...corsHeaders,
+
           "Content-Type":
-          "application/json"
+
+            "application/json"
+
         }
+
 
       }
 
     )
+
 
   }
 

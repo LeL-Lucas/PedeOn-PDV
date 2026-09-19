@@ -185,9 +185,16 @@ interface MercadoPagoBrickController {
 
 declare global {
   interface Window {
-    MercadoPago: new (publicKey: string, options?: { locale?: string }) => {
+    MercadoPago: new (
+      publicKey: string,
+      options?: { locale?: string }
+    ) => {
       bricks: () => {
-        create: (type: string, containerId: string, settings: Record<string, unknown>) => Promise<MercadoPagoBrickController>
+        create: (
+          type: string,
+          containerId: string,
+          settings: Record<string, unknown>
+        ) => Promise<MercadoPagoBrickController>
       }
     }
   }
@@ -206,30 +213,39 @@ const props = withDefaults(
     isOpen?: boolean
     store?: StoreProps | null
   }>(),
-  { isOpen: false, store: null }
+  {
+    isOpen: false,
+    store: null
+  }
 )
 
 const emit = defineEmits(['update:isOpen', 'close'])
+
 const cartStore = useCartStore()
 
 const customerName = ref('')
 const customerPhone = ref('')
 const deliveryType = ref<'delivery' | 'pickup'>('delivery')
 const customerAddress = ref('')
-const paymentMethod = ref('mercado_pago')
 
 const isOrderCompleted = ref(false)
 const createdOrderId = ref<string | null>(null)
+
 const brickController = ref<MercadoPagoBrickController | null>(null)
 const isInitializing = ref(false)
 
-// Dados do Pix retornados do backend
-const pixData = ref<{ qrCode: string; qrCodeBase64: string } | null>(null)
+const pixData = ref<{
+  qrCode: string
+  qrCodeBase64: string
+} | null>(null)
+
 const copiedPix = ref(false)
+
 
 const closeModal = () => {
   emit('update:isOpen', false)
   emit('close')
+
   setTimeout(() => {
     isOrderCompleted.value = false
     createdOrderId.value = null
@@ -237,237 +253,500 @@ const closeModal = () => {
   }, 300)
 }
 
+
 const closeSuccessModal = () => {
   closeModal()
 }
+
 
 const copyPixCode = () => {
   if (pixData.value?.qrCode) {
     navigator.clipboard.writeText(pixData.value.qrCode)
     copiedPix.value = true
-    setTimeout(() => { copiedPix.value = false }, 3000)
+
+    setTimeout(() => {
+      copiedPix.value = false
+    }, 3000)
   }
 }
 
+
 const initPaymentBrick = async () => {
+
   if (isInitializing.value) return
+
   isInitializing.value = true
 
   try {
-    await nextTick()
-    await new Promise((resolve) => setTimeout(resolve, 250))
 
-    const container = document.getElementById('paymentBrick_container')
+    await nextTick()
+
+    await new Promise(resolve => setTimeout(resolve, 250))
+
+
+    const container =
+      document.getElementById('paymentBrick_container')
+
+
     if (!container) return
 
+
     if (brickController.value) {
-      try { await brickController.value.unmount() } catch { }
+
+      try {
+        await brickController.value.unmount()
+      } catch {}
+
       brickController.value = null
     }
 
+
     container.innerHTML = ''
+
+
     await loadMercadoPago()
 
-    const mp = new window.MercadoPago(import.meta.env.VITE_MP_PUBLIC_KEY, { locale: 'pt-BR' })
+
+    const mp =
+      new window.MercadoPago(
+        import.meta.env.VITE_MP_PUBLIC_KEY,
+        {
+          locale: 'pt-BR'
+        }
+      )
+
+
     const bricksBuilder = mp.bricks()
 
+
     const settings = {
+
       initialization: {
-        amount: Number(cartStore.totalAmount) || 0,
+        amount: Number(cartStore.totalAmount) || 0
       },
+
+
       customization: {
+
         paymentMethods: {
+
           creditCard: 'all',
-          bankTransfer: 'all', // Permite o Pix no Brick
-        },
+
+          bankTransfer: 'all'
+
+        }
+
       },
+
+
       callbacks: {
+
+
         onReady: () => {
-          console.log('✅ Mercado Pago Brick pronto')
-          console.log('💰 Valor enviado:', Number(cartStore.totalAmount))
+
+          console.log(
+            '✅ Mercado Pago Brick pronto'
+          )
+
         },
 
-        onSubmit: ({ selectedPaymentMethod, formData }: { selectedPaymentMethod: string; formData: Record<string, any> }) => {
 
-          console.log('🚀 ON SUBMIT MERCADO PAGO')
-          console.log('Método selecionado:', selectedPaymentMethod)
-          console.log('Dados recebidos do Brick:', formData)
+        onSubmit: ({
+          selectedPaymentMethod,
+          formData
+        }: {
+          selectedPaymentMethod: string
+          formData: Record<string, any>
+        }) => {
 
-          return new Promise<void>((resolve, reject) => {
 
-            console.log('➡️ Chamando processOrderAndPayment')
+          console.log(
+            'Método selecionado:',
+            selectedPaymentMethod
+          )
 
-            processOrderAndPayment(selectedPaymentMethod, formData)
 
-              .then(() => {
-                console.log('✅ processOrderAndPayment finalizado')
-                resolve()
-              })
+          return processOrderAndPayment(
+            selectedPaymentMethod,
+            formData
+          )
 
-              .catch((err) => {
-                console.error('❌ Erro processOrderAndPayment:', err)
-                reject(err)
-              })
-
-          })
         },
 
-        onError: (error: Record<string, unknown>) => {
-          console.error('❌ Erro no Checkout Brick:', error)
-        },
-      },
+
+        onError: (error: unknown) => {
+
+          console.error(
+            'Erro Brick:',
+            error
+          )
+
+        }
+
+      }
+
     }
 
-    brickController.value = await bricksBuilder.create('payment', 'paymentBrick_container', settings)
-  } catch (e) {
-    console.error('Erro ao inicializar Mercado Pago:', e)
+
+    brickController.value =
+      await bricksBuilder.create(
+        'payment',
+        'paymentBrick_container',
+        settings
+      )
+
+
+  } catch(error) {
+
+    console.error(
+      'Erro inicializando MP:',
+      error
+    )
+
   } finally {
+
     isInitializing.value = false
+
   }
+
 }
+
+
 
 const handleAfterEnter = () => {
-  if (cartStore.items.length > 0 && !isOrderCompleted.value) {
+
+  if (
+    cartStore.items.length > 0 &&
+    !isOrderCompleted.value
+  ) {
+
     initPaymentBrick()
+
   }
+
 }
 
-watch(() => props.isOpen, (isOpen) => {
-  if (!isOpen && brickController.value) {
-    brickController.value.unmount().catch(() => { })
-    brickController.value = null
+
+
+watch(
+  () => props.isOpen,
+  (value) => {
+
+    if (!value && brickController.value) {
+
+      brickController.value
+        .unmount()
+        .catch(() => {})
+
+      brickController.value = null
+
+    }
+
   }
-})
+)
+
+
 
 onBeforeUnmount(async () => {
+
   if (brickController.value) {
-    try { await brickController.value.unmount() } catch { }
+
+    try {
+
+      await brickController.value.unmount()
+
+    } catch {}
+
   }
+
 })
 
-const processOrderAndPayment = async (selectedPaymentMethod: string, formData: Record<string, any>) => {
-  console.log(
-    "ENTROU NO PAGAMENTO",
-    selectedPaymentMethod,
-    formData
-  )
-  if (!customerName.value || !customerPhone.value) {
-    alert('Preencha seu Nome e Telefone antes de pagar.')
-    throw new Error('Dados incompletos')
+
+
+// ==============================
+// PAGAMENTO
+// ==============================
+
+
+const processOrderAndPayment = async (
+  selectedPaymentMethod: string,
+  formData: Record<string, any>
+) => {
+
+
+  if (!customerName.value ||
+      !customerPhone.value) {
+
+    throw new Error(
+      'Preencha seus dados'
+    )
+
   }
 
-  if (deliveryType.value === 'delivery' && !customerAddress.value) {
-    alert('Preencha o endereço de entrega.')
-    throw new Error('Endereço ausente')
+
+
+  if (
+    deliveryType.value === 'delivery' &&
+    !customerAddress.value
+  ) {
+
+    throw new Error(
+      'Informe o endereço'
+    )
+
   }
 
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-  if (!anonKey) {
-    alert('Erro de configuração: VITE_SUPABASE_ANON_KEY não foi encontrada.')
-    throw new Error('Chave do Supabase ausente')
+
+
+  const anonKey =
+    import.meta.env.VITE_SUPABASE_ANON_KEY
+
+
+
+  const payload = {
+
+
+    transaction_amount:
+      Number(cartStore.totalAmount),
+
+
+    token:
+      formData.token || null,
+
+
+    payment_method_id:
+      formData.payment_method_id,
+
+
+    installments:
+      formData.installments || 1,
+
+
+    issuer_id:
+  formData.issuer_id
+    ? Number(formData.issuer_id)
+    : null,
+
+
+    payer: {
+
+      email:
+        formData.payer?.email ||
+        'cliente@email.com',
+
+
+      identification:
+        formData.payer?.identification || null
+
+    },
+
+
+    description:
+      `Pedido ${props.store?.name || 'Loja'}`
+
   }
 
-  try {
-    // Monta payload adequado tanto para Pix quanto para Cartão
-    const payload = {
-      transaction_amount: Number(cartStore.totalAmount),
-      token: formData.token || null,
-      payment_method_id: selectedPaymentMethod,
-      email: formData.payer?.email || 'cliente@email.com',
-      description: `Pedido ${props.store?.name || 'Loja'}`
-    }
 
-    const res = await fetch('https://misntxirajngjcdpqwwn.supabase.co/functions/v1/create-payment', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${anonKey}`,
-        'apikey': anonKey
-      },
-      body: JSON.stringify(payload)
-    })
 
-    console.log('📡 Resposta HTTP create-payment:', res.status)
+  const res =
+    await fetch(
 
-    const paymentResult = await res.json()
+      'https://misntxirajngjcdpqwwn.supabase.co/functions/v1/create-payment',
 
-    console.log('💳 Retorno Mercado Pago:', paymentResult)
+      {
 
-    if (!res.ok) {
-      throw new Error(paymentResult.error || paymentResult.message || 'Erro ao processar pagamento')
-    }
+        method:'POST',
 
-    // Se for PIX, extrai os dados do QR Code retornados pela API
-    if (paymentResult.point_of_interaction?.transaction_data) {
-      const txData = paymentResult.point_of_interaction.transaction_data
-      pixData.value = {
-        qrCode: txData.qr_code,
-        qrCodeBase64: txData.qr_code_base64
+        headers:{
+
+          'Content-Type':'application/json',
+
+          'Authorization':
+            `Bearer ${anonKey}`,
+
+          'apikey':
+            anonKey
+
+        },
+
+
+        body:
+          JSON.stringify(payload)
+
       }
+
+    )
+
+
+
+  const paymentResult =
+    await res.json()
+
+
+
+  console.log(
+    'Mercado Pago:',
+    paymentResult
+  )
+
+
+
+  if (!res.ok) {
+
+    throw new Error(
+      paymentResult.error ||
+      'Erro pagamento'
+    )
+
+  }
+
+
+
+  // SOMENTE PIX
+
+  if (
+
+    paymentResult.payment_method_id === 'pix' &&
+
+    paymentResult.point_of_interaction
+      ?.transaction_data
+
+  ) {
+
+
+    const txData =
+      paymentResult
+        .point_of_interaction
+        .transaction_data
+
+
+
+    pixData.value = {
+
+      qrCode:
+        txData.qr_code,
+
+
+      qrCodeBase64:
+        txData.qr_code_base64
+
     }
 
-    await executeOrderFlow(paymentResult)
-  } catch (err: unknown) {
-    const error = err as Error
-    alert(`Erro no pagamento: ${error.message}`)
+
+  }
+
+
+
+  // CARTÃO SÓ APROVADO
+
+  if (
+
+    selectedPaymentMethod !== 'pix' &&
+
+    paymentResult.status !== 'approved'
+
+  ) {
+
+    throw new Error(
+      paymentResult.status_detail ||
+      'Pagamento não aprovado'
+    )
+
+  }
+
+
+
+  await executeOrderFlow(
+    paymentResult
+  )
+
+
+}
+
+
+
+
+
+const executeOrderFlow = async (
+  mpPaymentData: Record<string, any>
+) => {
+
+
+  const { data, error } =
+    await supabase
+      .from('orders')
+      .insert([{
+
+
+        store_id:
+          props.store?.id,
+
+
+        customer_name:
+          customerName.value,
+
+
+        customer_phone:
+          customerPhone.value,
+
+
+        address:
+          deliveryType.value === 'delivery'
+            ? customerAddress.value
+            : 'RETIRADA NO BALCAO',
+
+
+        delivery_type:
+          deliveryType.value,
+
+
+        total:
+          cartStore.totalAmount,
+
+
+        payment_method:
+          mpPaymentData.payment_method_id,
+
+
+        mercado_pago_id:
+          String(mpPaymentData.id),
+
+
+        status:
+          mpPaymentData.status === 'approved'
+            ? 'recebido'
+            : 'aguardando_pagamento',
+
+
+        preparation_time:'30'
+
+
+      }])
+
+
+      .select()
+
+      .single()
+
+
+
+  if(error)
     throw error
-  }
-}
 
-const executeOrderFlow = async (mpPaymentData: Record<string, unknown> | null = null) => {
-  if (!props.store?.id) throw new Error('Dados da loja indisponíveis.')
 
-  const isDelivery = String(deliveryType.value).trim() === 'delivery'
-  const formattedAddress = isDelivery ? customerAddress.value : 'RETIRADA NO BALCAO'
-  const finalDeliveryType = isDelivery ? 'delivery' : 'pickup'
 
-  const { data: orderData, error: orderError } = await supabase
-    .from('orders')
-    .insert([{
-      store_id: props.store.id,
-      customer_name: customerName.value,
-      customer_phone: customerPhone.value,
-      delivery_type: finalDeliveryType,
-      address: formattedAddress,
-      payment_method: paymentMethod.value,
-      total: cartStore.totalAmount,
+  createdOrderId.value =
+    data.id
 
-      // Novo vínculo com Mercado Pago
-      mercado_pago_id: mpPaymentData?.id
-        ? String(mpPaymentData.id)
-        : null,
 
-      status: mpPaymentData?.status === 'approved'
-        ? 'recebido'
-        : 'aguardando_pagamento',
 
-      preparation_time: '30'
-    }])
-    .select()
-    .single()
-
-  if (orderError) throw orderError
-
-  if (orderData && cartStore.items.length > 0) {
-    const itemsToInsert = cartStore.items.map(item => ({
-      order_id: orderData.id,
-      product_id: item.id ? String(item.id) : null,
-      product_name: item.name,
-      quantity: item.quantity,
-      price: Number(item.price),
-      selected_options: item.selected_options || []
-    }))
-
-    await supabase.from('order_items').insert(itemsToInsert)
-  }
-
-  localStorage.setItem('active_order_id', orderData.id)
-  window.dispatchEvent(new CustomEvent('order-created'))
-
-  createdOrderId.value = orderData.id
   cartStore.clearCart()
+
+
   isOrderCompleted.value = true
+
 }
+
 </script>
 
 <style scoped>

@@ -7,258 +7,320 @@ import { createClient } from
 console.log("payment-webhook iniciado")
 
 
-Deno.serve(async (req)=>{
+Deno.serve(async (req) => {
 
-try {
+  try {
 
+    const body = await req.json()
 
-const body = await req.json()
 
+    console.log(
+      "Webhook Mercado Pago:",
+      body
+    )
 
-console.log(
-"Webhook Mercado Pago:",
-body
-)
 
+    const paymentId =
+      body?.data?.id
 
 
-const paymentId =
-body?.data?.id
+    if (!paymentId) {
 
+      console.log(
+        "Sem ID de pagamento"
+      )
 
-if(!paymentId){
 
-console.log(
-"Sem ID de pagamento"
-)
+      return new Response(
+        "OK",
+        {
+          status: 200
+        }
+      )
 
+    }
 
-return new Response(
-"OK",
-{status:200}
-)
 
-}
 
+    const accessToken =
+      Deno.env.get(
+        "MP_ACCESS_TOKEN"
+      )
 
 
-const accessToken =
-Deno.env.get(
-"MP_ACCESS_TOKEN"
-)
 
+    if (!accessToken) {
 
+      throw new Error(
+        "MP_ACCESS_TOKEN ausente"
+      )
 
-if(!accessToken){
+    }
 
-throw new Error(
-"MP_ACCESS_TOKEN ausente"
-)
 
-}
 
+    // CONSULTA PAGAMENTO NO MERCADO PAGO
 
+    const mpResponse =
+      await fetch(
 
-// CONSULTA PAGAMENTO NO MERCADO PAGO
+        `https://api.mercadopago.com/v1/payments/${paymentId}`,
 
+        {
 
-const mpResponse =
-await fetch(
+          headers: {
 
-`https://api.mercadopago.com/v1/payments/${paymentId}`,
+            Authorization:
+              `Bearer ${accessToken}`
 
-{
+          }
 
-headers:{
+        }
 
-Authorization:
-`Bearer ${accessToken}`
+      )
 
-}
 
-}
 
-)
+    const payment =
+      await mpResponse.json()
 
 
 
-const payment =
-await mpResponse.json()
+    console.log(
+      "Pagamento Mercado Pago:",
+      payment
+    )
 
 
 
-console.log(
-"Pagamento Mercado Pago:",
-payment
-)
+    if (!mpResponse.ok) {
 
+      return new Response(
 
+        JSON.stringify(payment),
 
-if(!mpResponse.ok){
+        {
 
-return new Response(
+          status: 400,
 
-JSON.stringify(payment),
+          headers: {
 
-{
+            "Content-Type":
+              "application/json"
 
-status:400,
+          }
 
-headers:{
-"Content-Type":
-"application/json"
-}
+        }
 
-}
+      )
 
-)
+    }
 
-}
 
 
+    // CONECTA SUPABASE
 
+    const supabase =
+      createClient(
 
-// CONECTA SUPABASE
+        Deno.env.get(
+          "SUPABASE_URL"
+        )!,
 
+        Deno.env.get(
+          "SUPABASE_SERVICE_ROLE_KEY"
+        )!
 
-const supabase =
-createClient(
+      )
 
-Deno.env.get(
-"SUPABASE_URL"
-),
 
-Deno.env.get(
-"SUPABASE_SERVICE_ROLE_KEY"
-)
 
-)
 
+    // ATUALIZA PAGAMENTO
 
+    const { error: paymentError } =
+      await supabase
 
+        .from("payments")
 
-// ATUALIZA PAGAMENTO
+        .update({
 
+          status:
+            payment.status,
 
-const {error} =
-await supabase
+          qr_code:
+            payment.point_of_interaction
+              ?.transaction_data
+              ?.qr_code,
 
-.from("payments")
+          qr_code_base64:
+            payment.point_of_interaction
+              ?.transaction_data
+              ?.qr_code_base64,
 
-.update({
+          updated_at:
+            new Date()
 
-status:
-payment.status,
+        })
 
-qr_code:
-payment.point_of_interaction
-?.transaction_data
-?.qr_code,
+        .eq(
 
-qr_code_base64:
-payment.point_of_interaction
-?.transaction_data
-?.qr_code_base64,
+          "mercado_pago_id",
 
+          String(paymentId)
 
-updated_at:
-new Date()
+        )
 
-})
 
-.eq(
 
-"mercado_pago_id",
+    if (paymentError) {
 
-String(paymentId)
+      console.error(
+        "Erro ao atualizar pagamento:",
+        paymentError
+      )
 
-)
+      throw paymentError
 
+    }
 
 
-if(error){
 
-console.error(
-"Erro Supabase:",
-error
-)
+    console.log(
+      "Pagamento atualizado com sucesso"
+    )
 
-throw error
 
-}
 
 
+    // =====================================
+    // LIBERA PEDIDO APÓS PAGAMENTO APROVADO
+    // =====================================
 
 
-console.log(
-"Pagamento atualizado com sucesso"
-)
+    if (payment.status === "approved") {
 
 
+      const { error: orderError } =
 
-return new Response(
+        await supabase
 
-JSON.stringify({
+          .from("orders")
 
-success:true,
+          .update({
 
-status:
-payment.status
+            status:
+              "recebido"
 
-}),
+          })
 
-{
+          .eq(
 
-headers:{
+            "mercado_pago_id",
 
-"Content-Type":
-"application/json"
+            String(paymentId)
 
-}
+          )
 
-}
 
-)
 
+      if (orderError) {
 
+        console.error(
 
+          "Erro ao atualizar pedido:",
 
-}
+          orderError
 
-catch(error){
+        )
 
+      } else {
 
-console.error(
-"Erro webhook:",
-error
-)
+        console.log(
 
+          "Pedido liberado para produção"
 
-return new Response(
+        )
 
-JSON.stringify({
+      }
 
-error:
-error.message
 
-}),
+    }
 
-{
 
-status:500,
 
-headers:{
-"Content-Type":
-"application/json"
-}
+    return new Response(
 
-}
+      JSON.stringify({
 
-)
+        success: true,
 
+        status:
+          payment.status
 
-}
+      }),
 
+      {
+
+        headers: {
+
+          "Content-Type":
+            "application/json"
+
+        }
+
+      }
+
+    )
+
+
+
+  }
+
+  catch(error) {
+
+
+    console.error(
+
+      "Erro webhook:",
+
+      error
+
+    )
+
+
+
+    return new Response(
+
+      JSON.stringify({
+
+        error:
+
+          error instanceof Error
+
+            ? error.message
+
+            : "Erro desconhecido"
+
+      }),
+
+      {
+
+        status: 500,
+
+        headers: {
+
+          "Content-Type":
+            "application/json"
+
+        }
+
+      }
+
+    )
+
+
+  }
 
 
 })
