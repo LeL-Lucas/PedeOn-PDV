@@ -301,6 +301,20 @@ const route = useRoute()
 const router = useRouter()
 const { store, fetchStoreBySlug, loading, error } = useStore()
 
+// 👉 NOVO: Descobre o slug automaticamente pelo domínio ou pela URL
+const activeSlug = computed(() => {
+  // 1. Se tiver na URL (ex: app.com/s/purpleacai), usa o da URL
+  if (route.params.slug) return route.params.slug as string;
+
+  // 2. Se for a raiz do domínio personalizado, força o slug da loja
+  const host = window.location.hostname;
+  if (host === 'purpleacai.com.br' || host === 'www.purpleacai.com.br') {
+    return 'purpleacai';
+  }
+
+  return '';
+});
+
 const storeId = computed(() => store.value?.id ?? '')
 
 const { products, fetchProducts, subscribeToProducts } = useProducts(storeId.value)
@@ -343,6 +357,7 @@ const filteredProducts = computed(() => {
 const handleProductClick = (product: Product) => {
   if (!store.value?.is_open) return
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const prodAny = product as any
   const hasComplements =
     (Array.isArray(prodAny.complement_groups) && prodAny.complement_groups.length > 0) ||
@@ -356,11 +371,11 @@ const handleProductClick = (product: Product) => {
 }
 
 watch(
-  () => route.params.slug,
+  () => activeSlug.value,
   async (newSlug) => {
     if (newSlug) {
       selectedCategory.value = ''
-      await fetchStoreBySlug(newSlug as string)
+      await fetchStoreBySlug(newSlug)
       const currentStoreId = store.value?.id
       if (currentStoreId) {
         await Promise.all([
@@ -376,7 +391,7 @@ watch(
 )
 
 onMounted(async () => {
-  const slug = route.params.slug as string
+  const slug = activeSlug.value
   if (!slug) {
     router.push('/unauthorized')
     return

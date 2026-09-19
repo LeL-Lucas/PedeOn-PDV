@@ -2,11 +2,19 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { supabase } from '@/services/supabase'
 
 const routes: Array<RouteRecordRaw> = [
-  // Seleção de Comércios
+  // Seleção de Comércios OU Vitrine (Dependendo do Domínio)
   {
     path: '/',
     name: 'Home',
-    component: () => import('@/views/StoreSelector.vue')
+    component: () => {
+      const host = window.location.hostname
+      // Se aceder pelo domínio próprio do açaí, carrega a vitrine diretamente
+      if (host === 'purpleacai.com.br' || host === 'www.purpleacai.com.br') {
+        return import('@/views/StoreFront.vue')
+      }
+      // Caso contrário (ex: link da vercel), carrega o painel de seleção de lojas
+      return import('@/views/StoreSelector.vue')
+    }
   },
 
   // Tela de Login
