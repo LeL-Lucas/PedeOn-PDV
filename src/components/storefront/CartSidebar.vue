@@ -467,7 +467,7 @@ onBeforeUnmount(async () => {
 // PAGAMENTO
 // ==============================
 
-
+console.log("PAYLOAD FINAL ENVIADO:", payload)
 const processOrderAndPayment = async (
   selectedPaymentMethod: string,
   formData: Record<string, any>
