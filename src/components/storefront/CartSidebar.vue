@@ -827,84 +827,39 @@ const processOrderAndPayment = async (
 const executeOrderFlow = async (
   mpPaymentData: Record<string, any>
 ) => {
-
-
   const { data, error } =
     await supabase
       .from('orders')
       .insert([{
-
-
-        store_id:
-          props.store?.id,
-
-
-        customer_name:
-          customerName.value,
-
-
-        customer_phone:
-          customerPhone.value,
-
-
-        address:
-          deliveryType.value === 'delivery'
-            ? customerAddress.value
-            : 'RETIRADA NO BALCAO',
-
-
-        delivery_type:
-          deliveryType.value,
-
-
-        total:
-          cartStore.totalAmount,
-
-
-        payment_method:
-          mpPaymentData.payment_method_id,
-
-
-        mercado_pago_id:
-          String(mpPaymentData.id),
-
-
-        status:
-          mpPaymentData.status === 'approved'
-            ? 'recebido'
-            : 'aguardando_pagamento',
-
-
-        preparation_time:'30'
-
-
+        store_id: props.store?.id,
+        customer_name: customerName.value,
+        customer_phone: customerPhone.value,
+        address: deliveryType.value === 'delivery' ? customerAddress.value : 'RETIRADA NO BALCAO',
+        delivery_type: deliveryType.value,
+        total: cartStore.totalAmount,
+        payment_method: mpPaymentData.payment_method_id,
+        mercado_pago_id: String(mpPaymentData.id),
+        status: mpPaymentData.status === 'approved' ? 'recebido' : 'aguardando_pagamento',
+        preparation_time: '30',
+        // 👉 SALVA O PIX NO BANCO DE DADOS
+        pix_qr_code: pixData.value?.qrCode || null,
+        pix_qr_code_base64: pixData.value?.qrCodeBase64 || null
       }])
-
-
       .select()
-
       .single()
-
-
 
   if(error)
     throw error
 
-
-
-  createdOrderId.value =
-    data.id
+  createdOrderId.value = data.id
 
   // GRAVA NO CELULAR O ID E AVISA O COMPONENTE DE STATUS WIDGET
   localStorage.setItem('active_order_id', data.id)
   window.dispatchEvent(new CustomEvent('order-created'))
 
-
   cartStore.clearCart()
 
-
   isOrderCompleted.value = true
-
 }
 
 </script>
