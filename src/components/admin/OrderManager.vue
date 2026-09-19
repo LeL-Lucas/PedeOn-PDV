@@ -335,12 +335,10 @@ const fetchOrders = async () => {
   errorMessage.value = ''
 
   try {
-    // 1. Busca os pedidos da loja (filtrando para ignorar os que estão aguardando pagamento)
     const { data: fetchedOrders, error: ordersError } = await supabase
       .from('orders')
       .select('*')
       .eq('store_id', props.storeId)
-      .neq('status', 'AGUARDANDO_PAGAMENTO')
       .order('created_at', { ascending: false })
 
     if (ordersError) {
@@ -357,7 +355,6 @@ const fetchOrders = async () => {
 
     const orderIds = fetchedOrders.map(o => o.id)
 
-    // 2. Busca os itens vinculados aos pedidos encontrados
     const { data: fetchedItems, error: itemsError } = await supabase
       .from('order_items')
       .select('*')
@@ -367,11 +364,13 @@ const fetchOrders = async () => {
       console.warn('⚠️ Erro/Aviso ao carregar itens de order_items:', itemsError)
     }
 
-    // 3. Monta a lista combinada
-    orders.value = fetchedOrders.map(order => ({
-      ...order,
-      order_items: (fetchedItems || []).filter(item => item.order_id === order.id)
-    })) as Order[]
+    // Filtro forçado no JavaScript para remover pedidos pendentes de pagamento
+    orders.value = fetchedOrders
+      .filter(o => o.status !== 'AGUARDANDO_PAGAMENTO' && o.status !== 'aguardando_pagamento')
+      .map(order => ({
+        ...order,
+        order_items: (fetchedItems || []).filter(item => item.order_id === order.id)
+      })) as Order[]
 
   } catch (err: unknown) {
     const errorObj = err as Error
