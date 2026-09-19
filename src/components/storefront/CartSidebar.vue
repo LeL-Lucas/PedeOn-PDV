@@ -234,6 +234,7 @@ const pixData = ref<{
 } | null>(null)
 
 const copiedPix = ref(false)
+let orderStatusChannel: any = null
 
 const closeModal = async () => {
   try {
@@ -370,6 +371,9 @@ onBeforeUnmount(async () => {
       await brickController.value.unmount()
     } catch {}
   }
+  if (orderStatusChannel) {
+    supabase.removeChannel(orderStatusChannel)
+  }
 })
 
 // ==============================
@@ -459,9 +463,7 @@ const processOrderAndPayment = async (
 const executeOrderFlow = async (
   mpPaymentData: Record<string, any>
 ) => {
-  // Verifica se o pagamento foi aprovado (cartão) ou se é Pix gerado com sucesso
   const isApproved = mpPaymentData.status === 'approved'
-  const isPix = mpPaymentData.payment_method_id === 'pix'
 
   const { data, error } = await supabase
     .from('orders')
@@ -486,30 +488,13 @@ const executeOrderFlow = async (
 
   createdOrderId.value = data.id
 
-  // 👉 SÓ IMPRIME SE FOR CARTÃO APROVADO OU SE QUISER QUE O PIX IMPRIMA APÓS GERar O QR CODE
-  // (Se preferir que o Pix só imprima após o dinheiro cair de fato, alteramos para disparar via Webhook do Supabase)
   if (isApproved) {
-    try {
-      await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          storeName: props.store?.name || 'Purple Açaí',
-          type: 'receipt',
-          order: {
-            ...data,
-            items: cartStore.items
-          }
-        })
-      })
-      console.log('✅ Pagamento com cartão aprovado! Impressora acionada.')
-    } catch (printErr) {
-      console.warn('⚠️ Erro ao imprimir:', printErr)
-    }
+    triggerPrinter({
+      ...data,
+      items: cartStore.items
+    })
   } else {
-    console.log('⏳ Pagamento via Pix pendente. O pedido foi guardado como aguardando pagamento.')
+    watchOrderStatus(data.id)
   }
 
   localStorage.setItem('active_order_id', data.id)
@@ -517,6 +502,54 @@ const executeOrderFlow = async (
 
   cartStore.clearCart()
   isOrderCompleted.value = true
+}
+
+const watchOrderStatus = (orderId: string) => {
+  if (orderStatusChannel) {
+    supabase.removeChannel(orderStatusChannel)
+  }
+
+  orderStatusChannel = supabase
+    .channel(`order-status-${orderId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'orders',
+        filter: `id=eq.${orderId}`
+      },
+      async (payload: any) => {
+        const updatedOrder = payload.new
+        if (updatedOrder.status === 'recebido') {
+          triggerPrinter({
+            ...updatedOrder,
+            items: cartStore.items
+          })
+          supabase.removeChannel(orderStatusChannel)
+        }
+      }
+    )
+    .subscribe()
+}
+
+const triggerPrinter = async (orderData: any) => {
+  try {
+    await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        storeName: props.store?.name || 'Purple Açaí',
+        type: 'receipt',
+        order: orderData
+      })
+    })
+    console.log('✅ Impressora disparada com sucesso!')
+  } catch (printErr) {
+    console.warn('⚠️ Erro ao contactar o servidor de impressão local:', printErr)
+  }
 }
 </script>
 
