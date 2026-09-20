@@ -280,13 +280,7 @@ const calculateShippingFee = async () => {
   const storeLng = props.store?.longitude
 
   if (!storeLat || !storeLng) {
-    shippingFee.value = Number(props.store?.delivery_base_fee || 0)
-    return
-  }
-
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY
-  if (!apiKey) {
-    shippingError.value = 'Chave do Google Maps não configurada.'
+    shippingFee.value = Number(props.store?.delivery_base_fee || 5.00)
     return
   }
 
@@ -294,36 +288,38 @@ const calculateShippingFee = async () => {
   shippingError.value = ''
 
   try {
-    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(customerAddress.value)}&key=${apiKey}`)
-    const geoData = await geoRes.json()
+    const supabaseUrl = 'https://misntxirajngjcdpqwwn.supabase.co'
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-    if (!geoData.results || geoData.results.length === 0) {
-      throw new Error('Endereço não encontrado.')
+    // Chama a nossa Edge Function 'swift-processor' criada no Supabase
+    const res = await fetch(`${supabaseUrl}/functions/v1/swift-processor`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${anonKey}`,
+        'apikey': anonKey
+      },
+      body: JSON.stringify({
+        address: customerAddress.value,
+        storeLat,
+        storeLng,
+        baseFee: props.store?.delivery_base_fee,
+        feePerKm: props.store?.delivery_fee_per_km
+      })
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Erro ao calcular frete.')
     }
 
-    const customerLocation = geoData.results[0].geometry.location
-    const origin = `${storeLat},${storeLng}`
-    const destination = `${customerLocation.lat},${customerLocation.lng}`
-
-    const matrixRes = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin}&destinations=${destination}&key=${apiKey}`)
-    const matrixData = await matrixRes.json()
-
-    if (!matrixData.rows || matrixData.rows[0].elements[0].status !== 'OK') {
-      throw new Error('Não foi possível calcular a rota.')
-    }
-
-    const element = matrixData.rows[0].elements[0]
-    const distanceInKm = element.distance.value / 1000
-    distanceText.value = element.distance.text
-
-    const baseFee = Number(props.store?.delivery_base_fee ?? 5.00)
-    const feePerKm = Number(props.store?.delivery_fee_per_km ?? 1.50)
-
-    const calculated = baseFee + (distanceInKm * feePerKm)
-    shippingFee.value = Number(calculated.toFixed(2))
+    shippingFee.value = data.shippingFee
+    distanceText.value = data.distanceText
 
   } catch (err: unknown) {
     const error = err as Error
+    console.error('Erro ao calcular frete:', error)
     shippingError.value = error.message || 'Erro ao calcular taxa.'
     shippingFee.value = Number(props.store?.delivery_base_fee ?? 5.00)
   } finally {
