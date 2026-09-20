@@ -183,6 +183,7 @@
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useCartStore } from '@/stores/cart'
 import { supabase } from '@/services/supabase'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { loadMercadoPago } from '@mercadopago/sdk-js'
 
 interface MercadoPagoBrickController {
@@ -255,7 +256,7 @@ const pixData = ref<{
 } | null>(null)
 
 const copiedPix = ref(false)
-let orderStatusChannel: Record<string, unknown> | null = null
+let orderStatusChannel: RealtimeChannel | null = null
 
 const finalTotalAmount = computed(() => {
   const itemsTotal = Number(cartStore.totalAmount) || 0
@@ -469,7 +470,7 @@ onBeforeUnmount(async () => {
     } catch {}
   }
   if (orderStatusChannel) {
-    supabase.removeChannel(orderStatusChannel as any)
+    supabase.removeChannel(orderStatusChannel)
   }
 })
 
@@ -593,7 +594,7 @@ const executeOrderFlow = async (
 
 const watchOrderStatus = (orderId: string) => {
   if (orderStatusChannel) {
-    supabase.removeChannel(orderStatusChannel as any)
+    supabase.removeChannel(orderStatusChannel)
   }
 
   orderStatusChannel = supabase
@@ -606,14 +607,16 @@ const watchOrderStatus = (orderId: string) => {
         table: 'orders',
         filter: `id=eq.${orderId}`
       },
-      async (payload: any) => {
+      async (payload: { new: Record<string, any> }) => {
         const updatedOrder = payload.new
         if (updatedOrder.status === 'recebido') {
           triggerPrinter({
             ...updatedOrder,
             items: cartStore.items
           })
-          supabase.removeChannel(orderStatusChannel as any)
+          if (orderStatusChannel) {
+            supabase.removeChannel(orderStatusChannel)
+          }
         }
       }
     )
