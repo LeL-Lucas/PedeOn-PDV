@@ -185,12 +185,15 @@
                 <h4>Escolhas e adicionais</h4>
                 <p>Monte grupos para tamanhos, sabores, extras ou pontos de preparo.</p>
               </div>
-              <button type="button" class="btn-secondary" @click="addGroup">+ Novo grupo</button>
+              <div class="group-action-buttons">
+                <button type="button" class="btn-secondary import" @click="showImportModal = true">📂 Importar grupo salvo</button>
+                <button type="button" class="btn-secondary" @click="addGroup">+ Novo grupo</button>
+              </div>
             </div>
 
             <div v-if="form.complement_groups.length === 0" class="groups-empty">
               <strong>Nenhum grupo criado</strong>
-              <span>Adicione grupos apenas quando o cliente precisar fazer escolhas.</span>
+              <span>Adicione grupos ou importe adicionais salvos para este produto.</span>
             </div>
 
             <div v-for="(group, gIdx) in form.complement_groups" :key="gIdx" class="group-card">
@@ -211,6 +214,7 @@
                 <div class="group-controls">
                   <button type="button" @click="moveGroupUp(gIdx)" :disabled="gIdx === 0">↑</button>
                   <button type="button" @click="moveGroupDown(gIdx)" :disabled="gIdx === form.complement_groups.length - 1">↓</button>
+                  <button type="button" class="btn-save-global" @click="saveAsGlobalGroup(group)" title="Salvar grupo para reutilizar em outros produtos">💾 Salvar nos meus adicionais</button>
                   <button type="button" class="danger" @click="removeGroup(gIdx)">×</button>
                 </div>
               </div>
@@ -245,6 +249,31 @@
         </form>
       </div>
     </div>
+
+    <!-- MODAL DE IMPORTAÇÃO DE GRUPOS SALVOS -->
+    <div v-if="showImportModal" class="modal-overlay" @click.self="showImportModal = false">
+      <div class="modal-content import-modal">
+        <header class="modal-header">
+          <div>
+            <h3>Seus Grupos Salvos</h3>
+            <p>Selecione um grupo de adicionais para importar para este produto.</p>
+          </div>
+          <button type="button" class="modal-close" @click="showImportModal = false">×</button>
+        </header>
+        <div class="import-list">
+          <div v-if="globalGroups.length === 0" class="empty-import">
+            <p>Nenhum grupo salvo ainda. Quando criar um grupo num produto, clique em <strong>"💾 Salvar nos meus adicionais"</strong> para reutilizá-lo depois.</p>
+          </div>
+          <div v-for="g in globalGroups" :key="g.id" class="import-item">
+            <div>
+              <strong>{{ g.title }}</strong>
+              <span>{{ g.items.length }} opções (Min: {{ g.min }}, Máx: {{ g.max }})</span>
+            </div>
+            <button type="button" class="btn-primary" @click="importGlobalGroup(g)">Importar</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -259,6 +288,7 @@ interface ComplementItem {
 }
 
 interface ComplementGroup {
+  id?: string
   title: string
   min: number
   max: number
@@ -297,7 +327,9 @@ const props = defineProps<{ storeId: string }>()
 
 const products = ref<Product[]>([])
 const categories = ref<Category[]>([])
+const globalGroups = ref<ComplementGroup[]>([])
 const showModal = ref(false)
+const showImportModal = ref(false)
 const editingId = ref<string | null>(null)
 const saving = ref(false)
 const uploading = ref(false)
@@ -329,6 +361,47 @@ const fetchCategories = async () => {
     .eq('store_id', props.storeId)
 
   categories.value = (data as Category[]) || []
+}
+
+const fetchGlobalGroups = async () => {
+  const { data } = await supabase
+    .from('global_complement_groups')
+    .select('*')
+    .eq('store_id', props.storeId)
+
+  globalGroups.value = (data as ComplementGroup[]) || []
+}
+
+const saveAsGlobalGroup = async (group: ComplementGroup) => {
+  if (!group.title.trim()) {
+    alert('Dê um nome ao grupo antes de salvá-lo nos seus adicionais.')
+    return
+  }
+
+  const { error } = await supabase.from('global_complement_groups').insert([{
+    store_id: props.storeId,
+    title: group.title,
+    min: group.min,
+    max: group.max,
+    items: group.items
+  }])
+
+  if (error) {
+    alert('Erro ao salvar grupo: ' + error.message)
+  } else {
+    alert('Grupo salvo com sucesso! Agora você poderá reutilizá-lo em qualquer produto.')
+    fetchGlobalGroups()
+  }
+}
+
+const importGlobalGroup = (group: ComplementGroup) => {
+  form.value.complement_groups.push({
+    title: group.title,
+    min: group.min,
+    max: group.max,
+    items: JSON.parse(JSON.stringify(group.items))
+  })
+  showImportModal.value = false
 }
 
 const getCategoryName = (catId?: string) => {
@@ -454,7 +527,6 @@ const closeModal = () => {
 const saveProduct = async () => {
   saving.value = true
 
-  // Assegura formatações exatas de duas casas decimais antes de salvar no banco
   const sanitizedPrice = Number(Number(form.value.price || 0).toFixed(2))
   const sanitizedGroups = form.value.complement_groups.map(g => ({
     ...g,
@@ -496,6 +568,7 @@ const deleteProduct = async (id: string) => {
 onMounted(() => {
   fetchProducts()
   fetchCategories()
+  fetchGlobalGroups()
 })
 </script>
 
@@ -622,6 +695,7 @@ onMounted(() => {
 .complements{padding:1.2rem}
 .section-heading-inline{justify-content:space-between}
 .section-heading-inline h4{font-family:Manrope;font-size:1rem;margin:.25rem 0 .25rem}
+.group-action-buttons{display:flex;gap:.5rem}
 .btn-secondary{background:#eff5f0;color:var(--accent);padding:.68rem .88rem;border-radius:11px;font-size:.74rem}
 .btn-secondary:hover{background:#e5f0e7}
 .groups-empty{border:1px dashed #d8dfd9;border-radius:14px;padding:1.4rem;text-align:center;background:#fbfcfb}
@@ -631,10 +705,11 @@ onMounted(() => {
 .group-index{font-family:Manrope;font-size:.73rem;font-weight:800;color:var(--accent);background:#edf5ef;border-radius:9px;padding:.65rem .55rem}
 .limit-field{display:flex;flex-direction:column;gap:.35rem}
 .limit-field input{text-align:center;padding:.65rem}
-.group-controls{display:flex;gap:.25rem}
-.group-controls button{width:32px;height:34px;border-radius:9px;border:1px solid var(--line);background:#fff;color:#657069;cursor:pointer}
+.group-controls{display:flex;gap:.25rem;align-items:center}
+.group-controls button{height:34px;border-radius:9px;border:1px solid var(--line);background:#fff;color:#657069;cursor:pointer;padding:0 8px;font-size:.7rem;font-weight:700}
 .group-controls button:hover:not(:disabled){border-color:#bad0bf;color:var(--accent)}
-.group-controls .danger{color:var(--danger)}
+.btn-save-global{background:#edf5ef !important;color:var(--accent) !important;border-color:#cce3d2 !important;white-space:nowrap}
+.group-controls .danger{color:var(--danger);padding:0 10px;font-size:1rem}
 .group-controls button:disabled{opacity:.35;cursor:not-allowed}
 .items-area{margin-top:.75rem;padding-left:2.15rem}
 .item-row{display:grid;grid-template-columns:minmax(0,1fr) 125px 34px;gap:.4rem;margin-bottom:.45rem;align-items:center}
@@ -648,6 +723,14 @@ onMounted(() => {
 .btn-cancel{border:1px solid var(--line);background:#fff;color:#57625a;border-radius:11px;padding:.78rem 1rem;font-weight:800;cursor:pointer}
 .btn-save{padding:.78rem 1.1rem}
 .btn-save:disabled{opacity:.55;cursor:not-allowed;transform:none}
+
+.import-modal{max-width:500px}
+.import-list{padding:1.2rem;display:flex;flex-direction:column;gap:.8rem}
+.import-item{display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--line);padding:1rem;border-radius:14px}
+.import-item strong{display:block;font-size:.9rem}
+.import-item span{font-size:.75rem;color:var(--muted)}
+.empty-import{text-align:center;padding:2rem;color:var(--muted);font-size:.85rem}
+
 @media (max-width:1100px){
   .product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
