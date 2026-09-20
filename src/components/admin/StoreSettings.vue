@@ -67,12 +67,12 @@
 
             <label class="field">
               <span>Latitude da Loja</span>
-              <input v-model.number="form.latitude" type="number" step="0.00000001" placeholder="-23.550520" />
+              <input v-model.number="form.latitude" type="text" step="0.00000001" placeholder="-23.550520" />
             </label>
 
             <label class="field">
               <span>Longitude da Loja</span>
-              <input v-model.number="form.longitude" type="number" step="0.00000001" placeholder="-46.633308" />
+              <input v-model.number="form.longitude" type="text" step="0.00000001" placeholder="-46.633308" />
             </label>
 
             <label class="field">
