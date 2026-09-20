@@ -49,6 +49,44 @@
           </div>
         </article>
 
+        <!-- NOVO: CONFIGURAÇÃO DE LOCALIZAÇÃO E TAXA DE ENTREGA -->
+        <article class="panel-card location-panel">
+          <div class="panel-head">
+            <div>
+              <span class="section-kicker">Logística e Frete</span>
+              <h3>Localização e Taxa de Entrega por Distância</h3>
+              <p>Informe o endereço da loja e os valores do frete calculados via Google Maps.</p>
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <label class="field field-wide">
+              <span>Endereço físico da loja (Origem)</span>
+              <input v-model="form.address" type="text" placeholder="Rua, número, cidade - UF" />
+            </label>
+
+            <label class="field">
+              <span>Latitude da Loja</span>
+              <input v-model.number="form.latitude" type="number" step="0.00000001" placeholder="-23.550520" />
+            </label>
+
+            <label class="field">
+              <span>Longitude da Loja</span>
+              <input v-model.number="form.longitude" type="number" step="0.00000001" placeholder="-46.633308" />
+            </label>
+
+            <label class="field">
+              <span>Taxa Base de Entrega (R$)</span>
+              <input v-model.number="form.delivery_base_fee" type="number" step="0.01" min="0" placeholder="5.00" />
+            </label>
+
+            <label class="field">
+              <span>Valor por Quilómetro (R$/km)</span>
+              <input v-model.number="form.delivery_fee_per_km" type="number" step="0.01" min="0" placeholder="1.50" />
+            </label>
+          </div>
+        </article>
+
         <article class="panel-card banner-panel">
           <div class="panel-head compact">
             <div>
@@ -180,7 +218,12 @@ const form = ref({
   whatsapp_number: '',
   theme_color: '#ea1d2c',
   banner_url: '',
-  is_open: true
+  is_open: true,
+  address: '',
+  latitude: 0,
+  longitude: 0,
+  delivery_base_fee: 5.00,
+  delivery_fee_per_km: 1.50
 })
 
 watch(() => props.store, (newStore) => {
@@ -191,7 +234,12 @@ watch(() => props.store, (newStore) => {
       whatsapp_number: newStore.whatsapp_number || '',
       theme_color: newStore.theme_color || '#ea1d2c',
       banner_url: newStore.banner_url || '',
-      is_open: newStore.is_open ?? true
+      is_open: newStore.is_open ?? true,
+      address: newStore.address || '',
+      latitude: newStore.latitude || 0,
+      longitude: newStore.longitude || 0,
+      delivery_base_fee: newStore.delivery_base_fee ?? 5.00,
+      delivery_fee_per_km: newStore.delivery_fee_per_km ?? 1.50
     }
   }
 }, { immediate: true })
@@ -242,7 +290,12 @@ const handleSubmit = async () => {
     whatsapp_number: form.value.whatsapp_number.replace(/\D/g, ''),
     theme_color: form.value.theme_color,
     banner_url: form.value.banner_url,
-    is_open: form.value.is_open
+    is_open: form.value.is_open,
+    address: form.value.address,
+    latitude: form.value.latitude ? Number(form.value.latitude) : null,
+    longitude: form.value.longitude ? Number(form.value.longitude) : null,
+    delivery_base_fee: Number(form.value.delivery_base_fee) || 0,
+    delivery_fee_per_km: Number(form.value.delivery_fee_per_km) || 0
   }
 
   const { error } = await supabase

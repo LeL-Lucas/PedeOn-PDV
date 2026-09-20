@@ -18,7 +18,6 @@
 
         <!-- TELA 1: TELA DO PIX / SUCESSO -->
         <div v-if="isOrderCompleted" class="success-screen">
-          <!-- EXIBIÇÃO DO PIX -->
           <div v-if="pixData" class="pix-container">
             <div class="pix-qr-wrapper" v-if="pixData.qrCodeBase64">
               <img :src="`data:image/png;base64,${pixData.qrCodeBase64}`" alt="QR Code Pix" class="pix-qr-img" />
@@ -37,7 +36,6 @@
             </p>
           </div>
 
-          <!-- PAGO / CONFIRMADO -->
           <div v-else class="order-confirmed">
             <div class="success-icon">✓</div>
             <h3>Pedido Registrado!</h3>
@@ -131,10 +129,17 @@
                 </label>
               </div>
 
-              <label v-if="deliveryType === 'delivery'" class="field address-field">
+              <div v-if="deliveryType === 'delivery'" class="field address-field">
                 <span>Endereço completo</span>
-                <input type="text" v-model="customerAddress" placeholder="Rua, número, bairro" :required="deliveryType === 'delivery'" />
-              </label>
+                <div class="address-input-row">
+                  <input type="text" v-model="customerAddress" placeholder="Rua, número, bairro, cidade" :required="deliveryType === 'delivery'" @blur="calculateShippingFee" />
+                  <button type="button" class="btn-calc-shipping" @click="calculateShippingFee" :disabled="isCalculatingShipping">
+                    {{ isCalculatingShipping ? 'Calculando...' : 'Calcular Frete' }}
+                  </button>
+                </div>
+                <small v-if="shippingError" class="shipping-error">{{ shippingError }}</small>
+                <small v-if="shippingFee > 0" class="shipping-success">Taxa de entrega calculada: R$ {{ shippingFee.toFixed(2) }} ({{ distanceText }})</small>
+              </div>
             </div>
 
             <div class="order-section payment-block">
@@ -160,7 +165,14 @@
         </div>
 
         <footer v-if="cartStore.items.length > 0 && !isOrderCompleted" class="cart-footer">
-          <div class="total-copy"><span>Total do pedido</span><strong>R$ {{ (Number(cartStore.totalAmount) || 0).toFixed(2) }}</strong></div>
+          <div class="delivery-subtotal" v-if="deliveryType === 'delivery' && shippingFee > 0">
+            <span>Itens: R$ {{ Number(cartStore.totalAmount).toFixed(2) }}</span>
+            <span>Taxa de entrega: R$ {{ shippingFee.toFixed(2) }}</span>
+          </div>
+          <div class="total-copy">
+            <span>Total do pedido</span>
+            <strong>R$ {{ finalTotalAmount.toFixed(2) }}</strong>
+          </div>
         </footer>
       </section>
     </div>
@@ -168,7 +180,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useCartStore } from '@/stores/cart'
 import { supabase } from '@/services/supabase'
 import { loadMercadoPago } from '@mercadopago/sdk-js'
@@ -199,6 +211,10 @@ interface StoreProps {
   name?: string
   whatsapp_number?: string
   phone?: string
+  latitude?: number
+  longitude?: number
+  delivery_base_fee?: number
+  delivery_fee_per_km?: number
   [key: string]: unknown
 }
 
@@ -222,6 +238,11 @@ const customerPhone = ref('')
 const deliveryType = ref<'delivery' | 'pickup'>('delivery')
 const customerAddress = ref('')
 
+const shippingFee = ref(0)
+const distanceText = ref('')
+const isCalculatingShipping = ref(false)
+const shippingError = ref('')
+
 const isOrderCompleted = ref(false)
 const createdOrderId = ref<string | null>(null)
 
@@ -234,7 +255,80 @@ const pixData = ref<{
 } | null>(null)
 
 const copiedPix = ref(false)
-let orderStatusChannel: any = null
+let orderStatusChannel: Record<string, unknown> | null = null
+
+const finalTotalAmount = computed(() => {
+  const itemsTotal = Number(cartStore.totalAmount) || 0
+  const delivery = deliveryType.value === 'delivery' ? shippingFee.value : 0
+  return itemsTotal + delivery
+})
+
+watch(deliveryType, (newVal) => {
+  if (newVal === 'pickup') {
+    shippingFee.value = 0
+    shippingError.value = ''
+  } else if (customerAddress.value.trim().length > 5) {
+    calculateShippingFee()
+  }
+})
+
+const calculateShippingFee = async () => {
+  if (deliveryType.value !== 'delivery' || !customerAddress.value.trim()) return
+
+  const storeLat = props.store?.latitude
+  const storeLng = props.store?.longitude
+
+  if (!storeLat || !storeLng) {
+    shippingFee.value = Number(props.store?.delivery_base_fee || 0)
+    return
+  }
+
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY
+  if (!apiKey) {
+    shippingError.value = 'Chave do Google Maps não configurada.'
+    return
+  }
+
+  isCalculatingShipping.value = true
+  shippingError.value = ''
+
+  try {
+    const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(customerAddress.value)}&key=${apiKey}`)
+    const geoData = await geoRes.json()
+
+    if (!geoData.results || geoData.results.length === 0) {
+      throw new Error('Endereço não encontrado.')
+    }
+
+    const customerLocation = geoData.results[0].geometry.location
+    const origin = `${storeLat},${storeLng}`
+    const destination = `${customerLocation.lat},${customerLocation.lng}`
+
+    const matrixRes = await fetch(`https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin}&destinations=${destination}&key=${apiKey}`)
+    const matrixData = await matrixRes.json()
+
+    if (!matrixData.rows || matrixData.rows[0].elements[0].status !== 'OK') {
+      throw new Error('Não foi possível calcular a rota.')
+    }
+
+    const element = matrixData.rows[0].elements[0]
+    const distanceInKm = element.distance.value / 1000
+    distanceText.value = element.distance.text
+
+    const baseFee = Number(props.store?.delivery_base_fee ?? 5.00)
+    const feePerKm = Number(props.store?.delivery_fee_per_km ?? 1.50)
+
+    const calculated = baseFee + (distanceInKm * feePerKm)
+    shippingFee.value = Number(calculated.toFixed(2))
+
+  } catch (err: unknown) {
+    const error = err as Error
+    shippingError.value = error.message || 'Erro ao calcular taxa.'
+    shippingFee.value = Number(props.store?.delivery_base_fee ?? 5.00)
+  } finally {
+    isCalculatingShipping.value = false
+  }
+}
 
 const closeModal = async () => {
   try {
@@ -253,6 +347,9 @@ const closeModal = async () => {
     isOrderCompleted.value = false
     createdOrderId.value = null
     pixData.value = null
+    shippingFee.value = 0
+    shippingError.value = ''
+    customerAddress.value = ''
   }, 300)
 }
 
@@ -301,7 +398,7 @@ const initPaymentBrick = async () => {
 
     const settings = {
       initialization: {
-        amount: Number(cartStore.totalAmount) || 0
+        amount: Number(finalTotalAmount.value) || 0
       },
       customization: {
         paymentMethods: {
@@ -318,7 +415,7 @@ const initPaymentBrick = async () => {
           formData
         }: {
           selectedPaymentMethod: string
-          formData: Record<string, any>
+          formData: Record<string, unknown>
         }) => {
           return processOrderAndPayment(
             selectedPaymentMethod,
@@ -372,13 +469,9 @@ onBeforeUnmount(async () => {
     } catch {}
   }
   if (orderStatusChannel) {
-    supabase.removeChannel(orderStatusChannel)
+    supabase.removeChannel(orderStatusChannel as any)
   }
 })
-
-// ==============================
-// PAGAMENTO
-// ==============================
 
 const processOrderAndPayment = async (
   selectedPaymentMethod: string,
@@ -395,7 +488,7 @@ const processOrderAndPayment = async (
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
   const payload = {
-    transaction_amount: Number(cartStore.totalAmount),
+    transaction_amount: Number(finalTotalAmount.value),
     token: formData.token || null,
     payment_method_id: formData.payment_method_id || null,
     installments: Number(formData.installments || 1),
@@ -430,9 +523,6 @@ const processOrderAndPayment = async (
     )
   }
 
-  // ==========================
-  // PIX
-  // ==========================
   if (
     paymentResult.payment_method_id === 'pix' &&
     paymentResult.point_of_interaction?.transaction_data
@@ -444,9 +534,6 @@ const processOrderAndPayment = async (
     }
   }
 
-  // ==========================
-  // CARTÃO
-  // ==========================
   if (
     selectedPaymentMethod === 'credit_card' &&
     paymentResult.status !== 'approved'
@@ -471,9 +558,9 @@ const executeOrderFlow = async (
       store_id: props.store?.id,
       customer_name: customerName.value,
       customer_phone: customerPhone.value,
-      address: deliveryType.value === 'delivery' ? customerAddress.value : 'RETIRADA NO BALCAO',
+      address: deliveryType.value === 'delivery' ? `${customerAddress.value} (Frete: R$ ${shippingFee.value.toFixed(2)})` : 'RETIRADA NO BALCAO',
       delivery_type: deliveryType.value,
-      total: cartStore.totalAmount,
+      total: finalTotalAmount.value,
       payment_method: mpPaymentData.payment_method_id,
       mercado_pago_id: String(mpPaymentData.id),
       status: isApproved ? 'recebido' : 'aguardando_pagamento',
@@ -506,7 +593,7 @@ const executeOrderFlow = async (
 
 const watchOrderStatus = (orderId: string) => {
   if (orderStatusChannel) {
-    supabase.removeChannel(orderStatusChannel)
+    supabase.removeChannel(orderStatusChannel as any)
   }
 
   orderStatusChannel = supabase
@@ -526,14 +613,14 @@ const watchOrderStatus = (orderId: string) => {
             ...updatedOrder,
             items: cartStore.items
           })
-          supabase.removeChannel(orderStatusChannel)
+          supabase.removeChannel(orderStatusChannel as any)
         }
       }
     )
     .subscribe()
 }
 
-const triggerPrinter = async (orderData: any) => {
+const triggerPrinter = async (orderData: unknown) => {
   try {
     await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
       method: 'POST',
@@ -554,530 +641,81 @@ const triggerPrinter = async (orderData: any) => {
 </script>
 
 <style scoped>
-:global(body) {
-  margin: 0;
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(17, 17, 15, .48);
-  backdrop-filter: blur(7px);
-  display: flex;
-  justify-content: flex-end;
-  z-index: 9999;
-}
-
-.cart-drawer {
-  width: min(100%, 560px);
-  height: 100vh;
-  background: #fffdf9;
-  color: #171717;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -24px 0 70px rgba(0, 0, 0, .15);
-  overflow: hidden;
-}
-
-.cart-header {
-  padding: 30px 28px 22px;
-  border-bottom: 1px solid #ece7df;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-shrink: 0;
-}
-
-.eyebrow {
-  font-size: 10px;
-  letter-spacing: .18em;
-  text-transform: uppercase;
-  color: #9a948b;
-  font-weight: 800;
-  margin-bottom: 7px;
-}
-
-.cart-header h2 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.02;
-  letter-spacing: -.045em;
-  font-weight: 800;
-}
-
-.cart-header p {
-  margin: 7px 0 0;
-  color: #77716a;
-  font-size: 13px;
-}
-
-.btn-close {
-  width: 40px;
-  height: 40px;
-  border: 1px solid #e7e1d8;
-  background: #fff;
-  border-radius: 50%;
-  color: #34312d;
-  font-size: 24px;
-  cursor: pointer;
-}
-
-.cart-content {
-  overflow: auto;
-  flex: 1;
-  padding: 24px 28px 18px;
-}
-
-/* TELA DO PIX */
-.success-screen {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 28px;
-  overflow-y: auto;
-  gap: 16px;
-}
-
-.pix-container {
-  width: 100%;
-  max-width: 360px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 20px;
-}
-
-.pix-qr-wrapper {
-  width: 180px;
-  height: 180px;
-  padding: 8px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pix-qr-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
-.pix-copy-box {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  text-align: left;
-}
-
-.pix-copy-box label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #4b5563;
-}
-
-.pix-textarea {
-  width: 100%;
-  padding: 10px;
-  font-size: 11px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #f9fafb;
-  color: #374151;
-  resize: none;
-  font-family: monospace;
-  box-sizing: border-box;
-}
-
-.btn-copy-pix {
-  width: 100%;
-  background: #059669;
-  color: #fff;
-  border: none;
-  padding: 12px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: .2s ease;
-}
-
-.btn-copy-pix:hover {
-  background: #047857;
-}
-
-.pix-instructions {
-  font-size: 12px;
-  color: #6b7280;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.order-confirmed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.success-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: #dcfce7;
-  color: #16a34a;
-  font-size: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  margin-bottom: 12px;
-}
-
-.order-badge {
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 10px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  max-width: 320px;
-}
-
-.order-badge span {
-  font-size: 10px;
-  color: #6b7280;
-  font-weight: 800;
-}
-
-.order-badge strong {
-  font-size: 18px;
-  color: #111827;
-}
-
-.btn-primary-action {
-  width: 100%;
-  max-width: 320px;
-  background: #111827;
-  color: #fff;
-  border: none;
-  padding: 14px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.order-section {
-  padding-bottom: 22px;
-  margin-bottom: 22px;
-  border-bottom: 1px solid #eee9e2;
-}
-
-.section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.section-heading>div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.section-heading>div>span {
-  color: #a29c92;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.section-heading h3 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.section-meta,
-.secure-label {
-  color: #99928a;
-  font-size: 11px;
-}
-
-.items-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.cart-item {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid #ece7df;
-  background: #fff;
-  border-radius: 14px;
-}
-
-.item-thumb {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  border-radius: 10px;
-  background: #f2ece3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  color: #61594f;
-}
-
-.item-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.item-info strong {
-  font-size: 14px;
-}
-
-.item-addons {
-  font-size: 11px;
-  color: #7b746c;
-  margin-top: 2px;
-}
-
-.item-unit-price {
-  font-size: 11px;
-  color: #9b948b;
-  margin-top: 2px;
-}
-
-.item-bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.item-price {
-  font-size: 14px;
-}
-
-.quantity-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.quantity-controls>span {
-  width: 16px;
-  text-align: center;
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.btn-qty {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #ded7cd;
-  background: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-}
-
-.checkout-form {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field span {
-  font-size: 11px;
-  font-weight: 800;
-  color: #5f5952;
-}
-
-.field input {
-  width: 100%;
-  border: 1px solid #e1dbd2;
-  background: #fff;
-  border-radius: 10px;
-  min-height: 44px;
-  padding: 0 12px;
-  font-size: 14px;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.delivery-switch {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.delivery-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid #e4ded5;
-  border-radius: 12px;
-  cursor: pointer;
-  background: #fff;
-}
-
-.delivery-option.active {
-  border-color: #25231f;
-  background: #faf8f4;
-}
-
-.delivery-option input {
-  opacity: 0;
-  position: absolute;
-}
-
-.delivery-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: #f1ece5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.delivery-option>span:last-child {
-  display: flex;
-  flex-direction: column;
-}
-
-.delivery-option strong {
-  font-size: 13px;
-}
-
-.delivery-option small {
-  color: #8b837a;
-  font-size: 10px;
-}
-
-.payment-block {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.payment-shell {
-  background: #faf7f2;
-  border: 1px solid #e6dfd6;
-  border-radius: 14px;
-  padding: 14px;
-}
-
-#paymentBrick_container {
-  width: 100%;
-  min-height: 420px;
-  display: block;
-}
-
-.cart-footer {
-  padding: 18px 28px;
-  background: #fff;
-  border-top: 1px solid #e7e1d8;
-  flex-shrink: 0;
-}
-
-.total-copy {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-
-.total-copy span {
-  font-size: 12px;
-  color: #807970;
-}
-
-.total-copy strong {
-  font-size: 24px;
-}
-
-.empty-cart {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 32px;
-}
-
-.empty-mark {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f1ece4;
-  font-size: 24px;
-  margin-bottom: 16px;
-}
-
-.empty-cart h3 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.empty-cart p {
-  margin: 8px 0 20px;
-  color: #817a72;
-  font-size: 13px;
-}
-
-.btn-back-shopping {
-  border: 0;
-  background: #1f1e1b;
-  color: #fff;
-  padding: 12px 18px;
-  border-radius: 10px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity .2s ease;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
+:global(body) { margin: 0; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(17, 17, 15, .48); backdrop-filter: blur(7px); display: flex; justify-content: flex-end; z-index: 9999; }
+.cart-drawer { width: min(100%, 560px); height: 100vh; background: #fffdf9; color: #171717; display: flex; flex-direction: column; box-shadow: -24px 0 70px rgba(0, 0, 0, .15); overflow: hidden; }
+.cart-header { padding: 30px 28px 22px; border-bottom: 1px solid #ece7df; display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0; }
+.eyebrow { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: #9a948b; font-weight: 800; margin-bottom: 7px; }
+.cart-header h2 { margin: 0; font-size: 28px; line-height: 1.02; letter-spacing: -.045em; font-weight: 800; }
+.cart-header p { margin: 7px 0 0; color: #77716a; font-size: 13px; }
+.btn-close { width: 40px; height: 40px; border: 1px solid #e7e1d8; background: #fff; border-radius: 50%; color: #34312d; font-size: 24px; cursor: pointer; }
+.cart-content { overflow: auto; flex: 1; padding: 24px 28px 18px; }
+.success-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px; overflow-y: auto; gap: 16px; }
+.pix-container { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 16px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px; }
+.pix-qr-wrapper { width: 180px; height: 180px; padding: 8px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+.pix-qr-img { width: 100%; height: 100%; object-fit: contain; }
+.pix-copy-box { width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.pix-copy-box label { font-size: 11px; font-weight: 700; color: #4b5563; }
+.pix-textarea { width: 100%; padding: 10px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 8px; background: #f9fafb; color: #374151; resize: none; font-family: monospace; box-sizing: border-box; }
+.btn-copy-pix { width: 100%; background: #059669; color: #fff; border: none; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: .2s ease; }
+.btn-copy-pix:hover { background: #047857; }
+.pix-instructions { font-size: 12px; color: #6b7280; line-height: 1.4; margin: 0; }
+.order-confirmed { display: flex; flex-direction: column; align-items: center; }
+.success-icon { width: 64px; height: 64px; border-radius: 50%; background: #dcfce7; color: #16a34a; font-size: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-bottom: 12px; }
+.order-badge { background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 16px; display: flex; flex-direction: column; gap: 2px; width: 100%; max-width: 320px; }
+.order-badge span { font-size: 10px; color: #6b7280; font-weight: 800; }
+.order-badge strong { font-size: 18px; color: #111827; }
+.btn-primary-action { width: 100%; max-width: 320px; background: #111827; color: #fff; border: none; padding: 14px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.order-section { padding-bottom: 22px; margin-bottom: 22px; border-bottom: 1px solid #eee9e2; }
+.section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
+.section-heading>div { display: flex; align-items: center; gap: 8px; }
+.section-heading>div>span { color: #a29c92; font-size: 11px; font-weight: 800; }
+.section-heading h3 { margin: 0; font-size: 16px; }
+.section-meta, .secure-label { color: #99928a; font-size: 11px; }
+.items-list { display: flex; flex-direction: column; gap: 10px; }
+.cart-item { display: flex; gap: 12px; padding: 12px; border: 1px solid #ece7df; background: #fff; border-radius: 14px; }
+.item-thumb { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 10px; background: #f2ece3; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #61594f; }
+.item-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.item-info strong { font-size: 14px; }
+.item-addons { font-size: 11px; color: #7b746c; margin-top: 2px; }
+.item-unit-price { font-size: 11px; color: #9b948b; margin-top: 2px; }
+.item-bottom { display: flex; align-items: center; justify-content: space-between; }
+.item-price { font-size: 14px; }
+.quantity-controls { display: flex; align-items: center; gap: 8px; }
+.quantity-controls>span { width: 16px; text-align: center; font-weight: 800; font-size: 13px; }
+.btn-qty { width: 28px; height: 28px; border: 1px solid #ded7cd; background: #fff; border-radius: 8px; cursor: pointer; font-size: 16px; }
+.checkout-form { display: flex; flex-direction: column; }
+.form-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field span { font-size: 11px; font-weight: 800; color: #5f5952; }
+.field input { width: 100%; border: 1px solid #e1dbd2; background: #fff; border-radius: 10px; min-height: 44px; padding: 0 12px; font-size: 14px; outline: none; box-sizing: border-box; }
+.address-input-row { display: flex; gap: 8px; }
+.address-input-row input { flex: 1; }
+.btn-calc-shipping { background: #1f1e1b; color: #fff; border: none; padding: 0 14px; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.btn-calc-shipping:disabled { opacity: 0.6; cursor: wait; }
+.shipping-error { color: #dc2626; font-size: 11px; margin-top: 4px; }
+.shipping-success { color: #059669; font-size: 11px; margin-top: 4px; font-weight: 700; }
+.delivery-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.delivery-option { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #e4ded5; border-radius: 12px; cursor: pointer; background: #fff; }
+.delivery-option.active { border-color: #25231f; background: #faf8f4; }
+.delivery-option input { opacity: 0; position: absolute; }
+.delivery-icon { width: 28px; height: 28px; border-radius: 8px; background: #f1ece5; display: flex; align-items: center; justify-content: center; }
+.delivery-option>span:last-child { display: flex; flex-direction: column; }
+.delivery-option strong { font-size: 13px; }
+.delivery-option small { color: #8b837a; font-size: 10px; }
+.payment-block { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.payment-shell { background: #faf7f2; border: 1px solid #e6dfd6; border-radius: 14px; padding: 14px; }
+#paymentBrick_container { width: 100%; min-height: 420px; display: block; }
+.cart-footer { padding: 18px 28px; background: #fff; border-top: 1px solid #e7e1d8; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
+.delivery-subtotal { display: flex; justify-content: space-between; font-size: 11px; color: #706a62; border-bottom: 1px dashed #e7e1d8; padding-bottom: 6px; }
+.total-copy { display: flex; justify-content: space-between; align-items: flex-end; }
+.total-copy span { font-size: 12px; color: #807970; }
+.total-copy strong { font-size: 24px; }
+.empty-cart { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 32px; }
+.empty-mark { width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: #f1ece4; font-size: 24px; margin-bottom: 16px; }
+.empty-cart h3 { margin: 0; font-size: 20px; }
+.empty-cart p { margin: 8px 0 20px; color: #817a72; font-size: 13px; }
+.btn-back-shopping { border: 0; background: #1f1e1b; color: #fff; padding: 12px 18px; border-radius: 10px; font-weight: 800; cursor: pointer; }
+.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity .2s ease; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
 </style>
