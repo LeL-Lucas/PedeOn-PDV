@@ -99,7 +99,7 @@
                     <label>Preço base</label>
                     <div class="money-field">
                       <span>R$</span>
-                      <input v-model.number="form.price" type="number" step="0.01" required placeholder="0,00" />
+                      <input v-model.number="form.price" type="number" step="0.01" min="0" required placeholder="0,00" @blur="form.price = Number(Number(form.price || 0).toFixed(2))" />
                     </div>
                   </div>
 
@@ -220,7 +220,14 @@
                   <input v-model="item.name" type="text" placeholder="Nome da opção" required />
                   <div class="item-price">
                     <span>R$</span>
-                    <input v-model.number="item.price" type="number" step="0.50" min="0" placeholder="0,00" />
+                    <input
+                      v-model.number="item.price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      @blur="item.price = Number(Number(item.price || 0).toFixed(2))"
+                    />
                   </div>
                   <button type="button" @click="removeItem(gIdx, iIdx)" class="item-delete">×</button>
                 </div>
@@ -411,12 +418,18 @@ const openModal = (product?: Product) => {
     form.value = {
       name: product.name || '',
       description: product.description || '',
-      price: product.price || 0,
+      price: Number(Number(product.price || 0).toFixed(2)),
       category_id: product.category_id || '',
       image_url: product.image_url || '',
       show_in_storefront: product.show_in_storefront ?? true,
       complement_groups: Array.isArray(product.complement_groups)
-        ? JSON.parse(JSON.stringify(product.complement_groups))
+        ? JSON.parse(JSON.stringify(product.complement_groups)).map((g: ComplementGroup) => ({
+            ...g,
+            items: g.items.map((i: ComplementItem) => ({
+              ...i,
+              price: Number(Number(i.price || 0).toFixed(2))
+            }))
+          }))
         : []
     }
   } else {
@@ -440,15 +453,26 @@ const closeModal = () => {
 
 const saveProduct = async () => {
   saving.value = true
+
+  // Assegura formatações exatas de duas casas decimais antes de salvar no banco
+  const sanitizedPrice = Number(Number(form.value.price || 0).toFixed(2))
+  const sanitizedGroups = form.value.complement_groups.map(g => ({
+    ...g,
+    items: g.items.map(i => ({
+      ...i,
+      price: Number(Number(i.price || 0).toFixed(2))
+    }))
+  }))
+
   const payload = {
     store_id: props.storeId,
     name: form.value.name,
     description: form.value.description,
-    price: form.value.price,
+    price: sanitizedPrice,
     category_id: form.value.category_id || null,
     image_url: form.value.image_url,
     show_in_storefront: form.value.show_in_storefront,
-    complement_groups: form.value.complement_groups
+    complement_groups: sanitizedGroups
   }
 
   if (editingId.value) {
@@ -473,7 +497,9 @@ onMounted(() => {
   fetchProducts()
   fetchCategories()
 })
-</script><style scoped>
+</script>
+
+<style scoped>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
 
 .product-manager{
