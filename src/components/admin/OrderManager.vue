@@ -479,10 +479,16 @@ const sendToNodePrinter = async (order: Order) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true'
+        'ngrok-skip-browser-warning': '69420'
       },
       body: JSON.stringify(printPayload)
     })
+
+    // Se o ngrok retornar HTML de aviso, tratamos o erro de forma clara
+    const contentType = response.headers.get('content-type')
+    if (contentType && contentType.includes('text/html')) {
+      throw-new Error('O Ngrok interceptou o pedido com uma página de aviso. Por favor, aceda a https://fragrance-chirpy-broom.ngrok-free.dev no navegador e clique em "Visit Site".')
+    }
 
     const data = await response.json()
 
@@ -494,6 +500,7 @@ const sendToNodePrinter = async (order: Order) => {
   } catch (err: unknown) {
     const errorObj = err as Error
     console.error('❌ Erro ao enviar para impressora:', errorObj.message || errorObj)
+    alert(`Erro ao imprimir: ${errorObj.message}`)
   }
 }
 
