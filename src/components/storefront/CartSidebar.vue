@@ -549,7 +549,8 @@ const executeOrderFlow = async (
 ) => {
   const isApproved = mpPaymentData.status === 'approved'
 
-  const { data, error } = await supabase
+  // 1. Insere o pedido principal na tabela 'orders'
+  const { data: orderData, error: orderError } = await supabase
     .from('orders')
     .insert([{
       store_id: props.store?.id,
@@ -568,20 +569,44 @@ const executeOrderFlow = async (
     .select()
     .single()
 
-  if (error) throw error
+  if (orderError) throw orderError
 
-  createdOrderId.value = data.id
+  createdOrderId.value = orderData.id
 
-  if (isApproved) {
-    triggerPrinter({
-      ...data,
-      items: cartStore.items
-    })
-  } else {
-    watchOrderStatus(data.id)
+  // 2. Insere rigorosamente os itens do carrinho na tabela 'order_items'
+  if (cartStore.items && cartStore.items.length > 0) {
+    const orderItemsPayload = cartStore.items.map(item => ({
+      order_id: orderData.id,
+      product_id: item.id ? String(item.id) : null,
+      product_name: item.name,
+      price: Number(item.price),
+      quantity: Number(item.quantity),
+      selected_options: item.selected_options || null,
+      addons_description: item.selected_options?.map(opt => opt.name).join(', ') || null
+    }))
+
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .insert(orderItemsPayload)
+
+    if (itemsError) {
+      console.error('❌ Erro ao inserir itens do pedido na tabela order_items:', itemsError)
+    }
   }
 
-  localStorage.setItem('active_order_id', data.id)
+  // Prepara o objeto completo para a impressora ou escuta
+  const fullOrderWithItems = {
+    ...orderData,
+    items: cartStore.items
+  }
+
+  if (isApproved) {
+    triggerPrinter(fullOrderWithItems)
+  } else {
+    watchOrderStatus(orderData.id)
+  }
+
+  localStorage.setItem('active_order_id', orderData.id)
   window.dispatchEvent(new CustomEvent('order-created'))
 
   cartStore.clearCart()
