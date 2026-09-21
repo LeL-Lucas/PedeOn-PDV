@@ -1366,6 +1366,7 @@ onUnmounted(() => {
 }
 
 .modal-footer {
-  Substituir o conteúdo do seu `OrderManager.vue` por esta versão com o listener automático.
-  Basta atualizar o ficheiro, commitar e enviar para a Vercel com o git push.
+    padding-bottom: calc(15px + env(safe-area-inset-bottom));
+  }
+
 </style>
