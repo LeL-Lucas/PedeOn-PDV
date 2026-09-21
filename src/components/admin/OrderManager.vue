@@ -401,21 +401,28 @@ const setupRealtime = () => {
         const newOrder = payload.new as Order
         const oldOrder = payload.old as Order
 
-        // Dispara a impressão APENAS se o status mudou para 'recebido'
         const acabouDeSerPago = payload.eventType === 'UPDATE' && oldOrder?.status !== 'recebido' && newOrder.status === 'recebido'
 
         if (acabouDeSerPago) {
-          const { data: itemsData } = await supabase
+          console.log('🔍 Buscando itens do pedido na base de dados para o ID:', newOrder.id)
+
+          // Busca garantida dos itens na tabela order_items do Supabase
+          const { data: itemsData, error: itemsError } = await supabase
             .from('order_items')
             .select('*')
             .eq('order_id', newOrder.id)
 
+          if (itemsError) {
+            console.error('❌ Erro ao buscar order_items no Realtime:', itemsError)
+          }
+
           const fullOrder = {
             ...newOrder,
+            order_items: itemsData || [],
             items: itemsData && itemsData.length > 0 ? itemsData : parseItems(newOrder)
           }
 
-          console.log('🖨️ Pagamento confirmado! Disparando impressão automática...', fullOrder)
+          console.log('🖨️ Payload completo montado com sucesso para impressão:', fullOrder)
           sendToNodePrinter(fullOrder)
         }
 
@@ -424,7 +431,6 @@ const setupRealtime = () => {
     )
     .subscribe()
 }
-
 watch(
   () => props.storeId,
   (newStoreId) => {
