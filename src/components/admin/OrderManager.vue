@@ -399,8 +399,29 @@ const setupRealtime = () => {
         table: 'orders',
         filter: `store_id=eq.${props.storeId}`
       },
-      () => {
-        console.log('🚨 Atualização de pedidos recebida via Realtime!')
+      async (payload) => {
+        console.log('🚨 Atualização de pedidos recebida via Realtime no Admin!', payload)
+
+        // Se entrou um novo pedido ou o status mudou para 'recebido', dispara a impressão automática
+        if (payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && payload.new.status === 'recebido')) {
+          const newOrder = payload.new as Order
+          if (newOrder.status === 'recebido' || payload.eventType === 'INSERT') {
+            // Busca os itens associados para garantir o envio completo
+            const { data: itemsData } = await supabase
+              .from('order_items')
+              .select('*')
+              .eq('order_id', newOrder.id)
+
+            const fullOrder = {
+              ...newOrder,
+              items: itemsData || parseItems(newOrder)
+            }
+
+            console.log('🖨️ Disparando impressão automática para o pedido:', fullOrder.id)
+            sendToNodePrinter(fullOrder)
+          }
+        }
+
         fetchOrders()
       }
     )
@@ -484,10 +505,9 @@ const sendToNodePrinter = async (order: Order) => {
       body: JSON.stringify(printPayload)
     })
 
-    // Se o ngrok retornar HTML de aviso, tratamos o erro de forma clara
     const contentType = response.headers.get('content-type')
     if (contentType && contentType.includes('text/html')) {
-      throw-new Error('O Ngrok interceptou o pedido com uma página de aviso. Por favor, aceda a https://fragrance-chirpy-broom.ngrok-free.dev no navegador e clique em "Visit Site".')
+      throw new Error('O Ngrok interceptou o pedido com uma página de aviso. Por favor, aceda a https://fragrance-chirpy-broom.ngrok-free.dev no navegador e clique em "Visit Site".')
     }
 
     const data = await response.json()
@@ -500,7 +520,6 @@ const sendToNodePrinter = async (order: Order) => {
   } catch (err: unknown) {
     const errorObj = err as Error
     console.error('❌ Erro ao enviar para impressora:', errorObj.message || errorObj)
-    alert(`Erro ao imprimir: ${errorObj.message}`)
   }
 }
 
@@ -1347,147 +1366,6 @@ onUnmounted(() => {
 }
 
 .modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 22px 20px;
-  border-top: 1px solid #eceae4;
-  background: #fcfcfa;
-}
-
-.modal-footer>div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.modal-footer>div span {
-  color: #99968d;
-  font-size: .66rem;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.modal-footer>div strong {
-  font-family: 'Manrope', sans-serif;
-  font-size: 1.15rem;
-  letter-spacing: -.03em;
-}
-
-.modal-close-button {
-  min-height: 41px;
-  padding: 0 16px;
-  border-radius: 11px;
-  background: #242420;
-  color: #fff;
-  font-size: .78rem;
-  font-weight: 800;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 1050px) {
-  .orders-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 700px) {
-  .order-manager {
-    padding: 18px 14px 28px;
-  }
-
-  .orders-header {
-    align-items: flex-start;
-  }
-
-  .orders-header h2 {
-    font-size: 2rem;
-  }
-
-  .orders-header p {
-    font-size: .85rem;
-    max-width: 260px;
-  }
-
-  .refresh-button {
-    min-width: 44px;
-    width: 44px;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .refresh-button span {
-    display: none;
-  }
-
-  .ops-strip {
-    margin: 18px 0 18px;
-  }
-
-  .order-card {
-    padding: 16px;
-    border-radius: 18px;
-  }
-
-  .order-card-top {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .order-top-meta {
-    justify-content: flex-start;
-  }
-
-  .order-info-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .info-item-wide {
-    grid-column: auto;
-  }
-
-  .status-section-head {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .order-card-footer {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .print-button {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .modal-overlay {
-    padding: 10px;
-    align-items: end;
-  }
-
-  .modal-content {
-    max-height: calc(100vh - 20px);
-    border-radius: 22px 22px 14px 14px;
-  }
-
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding-left: 17px;
-    padding-right: 17px;
-  }
-
-  .modal-footer {
-    padding-bottom: calc(15px + env(safe-area-inset-bottom));
-  }
-}
+  Substituir o conteúdo do seu `OrderManager.vue` por esta versão com o listener automático.
+  Basta atualizar o ficheiro, commitar e enviar para a Vercel com o git push.
 </style>
