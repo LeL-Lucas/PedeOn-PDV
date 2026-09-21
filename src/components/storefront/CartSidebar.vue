@@ -582,7 +582,7 @@ const executeOrderFlow = async (
       price: Number(item.price),
       quantity: Number(item.quantity),
       selected_options: item.selected_options || null,
-      addons_description: item.selected_options?.map(opt => opt.name).join(', ') || null
+      addons_description: item.selected_options?.map((opt: any) => opt?.name || opt).join(', ') || null
     }))
 
     const { error: itemsError } = await supabase
