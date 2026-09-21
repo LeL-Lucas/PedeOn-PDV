@@ -291,7 +291,6 @@ const closeModal = () => {
   selectedOrder.value = null
 }
 
-// Extração e Normalização segura dos Itens do Pedido
 const parseItems = (orderObj: Order | null): OrderItem[] => {
   if (!orderObj) return []
 
@@ -314,7 +313,6 @@ const parseItems = (orderObj: Order | null): OrderItem[] => {
   return Array.isArray(raw) ? (raw as OrderItem[]) : []
 }
 
-// Cálculo seguro do Total do Pedido
 const getOrderTotal = (order: Order): number => {
   const directTotal = Number(order.total || order.total_amount || 0)
   if (directTotal > 0) return directTotal
@@ -327,7 +325,6 @@ const getOrderTotal = (order: Order): number => {
   }, 0)
 }
 
-// Buscar pedidos filtrando por store_id
 const fetchOrders = async () => {
   if (!props.storeId) return
 
@@ -364,7 +361,6 @@ const fetchOrders = async () => {
       console.warn('⚠️ Erro/Aviso ao carregar itens de order_items:', itemsError)
     }
 
-    // Filtro forçado no JavaScript para remover pedidos pendentes de pagamento
     orders.value = fetchedOrders
       .filter(o => o.status !== 'AGUARDANDO_PAGAMENTO' && o.status !== 'aguardando_pagamento')
       .map(order => ({
@@ -402,24 +398,25 @@ const setupRealtime = () => {
       async (payload) => {
         console.log('🚨 Atualização de pedidos recebida via Realtime no Admin!', payload)
 
-        // Se entrou um novo pedido ou o status mudou para 'recebido', dispara a impressão automática
-        if (payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && payload.new.status === 'recebido')) {
-          const newOrder = payload.new as Order
-          if (newOrder.status === 'recebido' || payload.eventType === 'INSERT') {
-            // Busca os itens associados para garantir o envio completo
-            const { data: itemsData } = await supabase
-              .from('order_items')
-              .select('*')
-              .eq('order_id', newOrder.id)
+        const newOrder = payload.new as Order
+        const oldOrder = payload.old as Order
 
-            const fullOrder = {
-              ...newOrder,
-              items: itemsData || parseItems(newOrder)
-            }
+        // Dispara a impressão APENAS se o status mudou para 'recebido'
+        const acabouDeSerPago = payload.eventType === 'UPDATE' && oldOrder?.status !== 'recebido' && newOrder.status === 'recebido'
 
-            console.log('🖨️ Disparando impressão automática para o pedido:', fullOrder.id)
-            sendToNodePrinter(fullOrder)
+        if (acabouDeSerPago) {
+          const { data: itemsData } = await supabase
+            .from('order_items')
+            .select('*')
+            .eq('order_id', newOrder.id)
+
+          const fullOrder = {
+            ...newOrder,
+            items: itemsData && itemsData.length > 0 ? itemsData : parseItems(newOrder)
           }
+
+          console.log('🖨️ Pagamento confirmado! Disparando impressão automática...', fullOrder)
+          sendToNodePrinter(fullOrder)
         }
 
         fetchOrders()
@@ -428,7 +425,6 @@ const setupRealtime = () => {
     .subscribe()
 }
 
-// Observa mudanças em storeId e carrega quando a prop estiver disponível
 watch(
   () => props.storeId,
   (newStoreId) => {
@@ -550,6 +546,7 @@ onUnmounted(() => {
   }
 })
 </script>
+
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
 
@@ -1366,7 +1363,147 @@ onUnmounted(() => {
 }
 
 .modal-footer {
-    padding-bottom: calc(15px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 22px 20px;
+  border-top: 1px solid #eceae4;
+  background: #fcfcfa;
+}
+
+.modal-footer>div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.modal-footer>div span {
+  color: #99968d;
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.modal-footer>div strong {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.15rem;
+  letter-spacing: -.03em;
+}
+
+.modal-close-button {
+  min-height: 41px;
+  padding: 0 16px;
+  border-radius: 11px;
+  background: #242420;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1050px) {
+  .orders-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .order-manager {
+    padding: 18px 14px 28px;
   }
 
+  .orders-header {
+    align-items: flex-start;
+  }
+
+  .orders-header h2 {
+    font-size: 2rem;
+  }
+
+  .orders-header p {
+    font-size: .85rem;
+    max-width: 260px;
+  }
+
+  .refresh-button {
+    min-width: 44px;
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .refresh-button span {
+    display: none;
+  }
+
+  .ops-strip {
+    margin: 18px 0 18px;
+  }
+
+  .order-card {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .order-card-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .order-top-meta {
+    justify-content: flex-start;
+  }
+
+  .order-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-item-wide {
+    grid-column: auto;
+  }
+
+  .status-section-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .order-card-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .print-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+    align-items: end;
+  }
+
+  .modal-content {
+    max-height: calc(100vh - 20px);
+    border-radius: 22px 22px 14px 14px;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-left: 17px;
+    padding-right: 17px;
+  }
+
+  .modal-footer {
+    padding-bottom: calc(15px + env(safe-area-inset-bottom));
+  }
+}
 </style>
