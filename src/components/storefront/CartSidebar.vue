@@ -138,7 +138,7 @@
                   </button>
                 </div>
                 <small v-if="shippingError" class="shipping-error">{{ shippingError }}</small>
-                <small v-if="shippingFee > 0" class="shipping-success">Taxa de entrega calculada: R$ {{ shippingFee.toFixed(2) }} ({{ distanceText }})</small>
+                <small v-if="shippingFee > 0 && !shippingError" class="shipping-success">Taxa de entrega calculada: R$ {{ shippingFee.toFixed(2) }} ({{ distanceText }})</small>
               </div>
             </div>
 
@@ -286,12 +286,12 @@ const calculateShippingFee = async () => {
 
   isCalculatingShipping.value = true
   shippingError.value = ''
+  shippingFee.value = 0 // Reseta a taxa enquanto calcula para evitar inconsistências
 
   try {
     const supabaseUrl = 'https://misntxirajngjcdpqwwn.supabase.co'
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-    // Chama a nossa Edge Function 'swift-processor' criada no Supabase
     const res = await fetch(`${supabaseUrl}/functions/v1/swift-processor`, {
       method: 'POST',
       headers: {
@@ -321,7 +321,7 @@ const calculateShippingFee = async () => {
     const error = err as Error
     console.error('Erro ao calcular frete:', error)
     shippingError.value = error.message || 'Erro ao calcular taxa.'
-    shippingFee.value = Number(props.store?.delivery_base_fee ?? 5.00)
+    shippingFee.value = 0 // Garante que o frete fica a zero se houver erro de área
   } finally {
     isCalculatingShipping.value = false
   }
@@ -478,8 +478,13 @@ const processOrderAndPayment = async (
     throw new Error('Preencha seus dados')
   }
 
-  if (deliveryType.value === 'delivery' && !customerAddress.value) {
-    throw new Error('Informe o endereço')
+  if (deliveryType.value === 'delivery') {
+    if (!customerAddress.value) {
+      throw new Error('Informe o endereço')
+    }
+    if (shippingError.value || shippingFee.value <= 0) {
+      throw new Error('Endereço fora da área de entrega ou frete não calculado.')
+    }
   }
 
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -549,7 +554,6 @@ const executeOrderFlow = async (
 ) => {
   const isApproved = mpPaymentData.status === 'approved'
 
-  // 1. Insere o pedido principal na tabela 'orders'
   const { data: orderData, error: orderError } = await supabase
     .from('orders')
     .insert([{
@@ -573,7 +577,6 @@ const executeOrderFlow = async (
 
   createdOrderId.value = orderData.id
 
-  // 2. Insere rigorosamente os itens do carrinho na tabela 'order_items'
   if (cartStore.items && cartStore.items.length > 0) {
     const orderItemsPayload = cartStore.items.map(item => ({
       order_id: orderData.id,
@@ -594,7 +597,6 @@ const executeOrderFlow = async (
     }
   }
 
-  // Prepara o objeto completo para a impressora ou escuta
   const fullOrderWithItems = {
     ...orderData,
     items: cartStore.items
@@ -717,7 +719,7 @@ const triggerPrinter = async (orderData: unknown) => {
 .address-input-row input { flex: 1; }
 .btn-calc-shipping { background: #1f1e1b; color: #fff; border: none; padding: 0 14px; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .btn-calc-shipping:disabled { opacity: 0.6; cursor: wait; }
-.shipping-error { color: #dc2626; font-size: 11px; margin-top: 4px; }
+.shipping-error { color: #dc2626; font-size: 11px; margin-top: 4px; font-weight: 700; }
 .shipping-success { color: #059669; font-size: 11px; margin-top: 4px; font-weight: 700; }
 .delivery-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .delivery-option { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #e4ded5; border-radius: 12px; cursor: pointer; background: #fff; }
