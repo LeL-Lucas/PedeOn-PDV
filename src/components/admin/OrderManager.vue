@@ -325,6 +325,7 @@ const getOrderTotal = (order: Order): number => {
   }, 0)
 }
 
+// No seu OrderManager.vue, substitua ou ajuste a função fetchOrders para buscar de order_items:
 const fetchOrders = async () => {
   if (!props.storeId) return
 
@@ -339,7 +340,6 @@ const fetchOrders = async () => {
       .order('created_at', { ascending: false })
 
     if (ordersError) {
-      console.error('❌ Erro na tabela orders:', ordersError)
       errorMessage.value = `Erro no banco de dados: ${ordersError.message}`
       orders.value = []
       return
@@ -352,25 +352,27 @@ const fetchOrders = async () => {
 
     const orderIds = fetchedOrders.map(o => o.id)
 
+    // Busca os itens na tabela correta 'order_items' (igual ao TableManager)
     const { data: fetchedItems, error: itemsError } = await supabase
       .from('order_items')
       .select('*')
       .in('order_id', orderIds)
 
     if (itemsError) {
-      console.warn('⚠️ Erro/Aviso ao carregar itens de order_items:', itemsError)
+      console.warn('⚠️ Erro ao carregar itens de order_items:', itemsError)
     }
 
+    // Associa os itens correspondentes a cada pedido
     orders.value = fetchedOrders
       .filter(o => o.status !== 'AGUARDANDO_PAGAMENTO' && o.status !== 'aguardando_pagamento')
       .map(order => ({
         ...order,
-        order_items: (fetchedItems || []).filter(item => item.order_id === order.id)
+        order_items: (fetchedItems || []).filter(item => item.order_id === order.id),
+        items: (fetchedItems || []).filter(item => item.order_id === order.id)
       })) as Order[]
 
   } catch (err: unknown) {
-    const errorObj = err as Error
-    console.error('❌ Erro inesperado ao carregar pedidos:', errorObj)
+    console.error('❌ Erro inesperado ao carregar pedidos:', err)
     errorMessage.value = 'Ocorreu um erro de conexão ao carregar os pedidos.'
   } finally {
     isLoading.value = false
