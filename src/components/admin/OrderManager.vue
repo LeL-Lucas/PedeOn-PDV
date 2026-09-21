@@ -478,7 +478,8 @@ const sendToNodePrinter = async (order: Order) => {
     const response = await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
       },
       body: JSON.stringify(printPayload)
     })
