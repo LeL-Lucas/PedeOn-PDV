@@ -47,7 +47,7 @@
             <div class="order-number">
               <span>Pedido</span>
               <strong>#{{ order.code || order.order_number || (order.id ? order.id.toString().slice(0, 5) : '---')
-                }}</strong>
+              }}</strong>
             </div>
 
             <div class="order-top-meta">
@@ -475,7 +475,7 @@ const sendToNodePrinter = async (order: Order) => {
       }
     }
 
-    const response = await fetch('http://localhost:3000/print', {
+    const response = await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
