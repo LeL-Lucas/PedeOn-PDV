@@ -278,6 +278,16 @@ watch(deliveryType, (newVal) => {
   }
 })
 
+// Observa alterações no tipo de entrega ou no valor total para recriar o Payment Brick corretamente
+watch([deliveryType, finalTotalAmount], () => {
+  if (props.isOpen && !isOrderCompleted.value) {
+    const canShowPayment = deliveryType.value === 'pickup' || (!shippingError.value && shippingFee.value > 0)
+    if (canShowPayment) {
+      initPaymentBrick()
+    }
+  }
+})
+
 const calculateShippingFee = async () => {
   if (deliveryType.value !== 'delivery' || !customerAddress.value.trim()) return
 
