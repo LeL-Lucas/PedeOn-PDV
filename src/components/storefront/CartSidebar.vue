@@ -149,8 +149,13 @@
                 </div>
                 <span class="secure-label">Pagamento seguro</span>
               </div>
-              <div class="payment-shell">
+
+              <!-- Bloco de pagamento condicionado à validade do frete -->
+              <div class="payment-shell" v-if="deliveryType === 'pickup' || (!shippingError && shippingFee > 0)">
                 <div id="paymentBrick_container"></div>
+              </div>
+              <div v-else class="payment-blocked-notice">
+                <p>⚠️ Informe um endereço válido dentro da área de atendimento para liberar o pagamento.</p>
               </div>
             </div>
           </form>
@@ -286,7 +291,7 @@ const calculateShippingFee = async () => {
 
   isCalculatingShipping.value = true
   shippingError.value = ''
-  shippingFee.value = 0 // Reseta a taxa enquanto calcula para evitar inconsistências
+  shippingFee.value = 0
 
   try {
     const supabaseUrl = 'https://misntxirajngjcdpqwwn.supabase.co'
@@ -321,7 +326,7 @@ const calculateShippingFee = async () => {
     const error = err as Error
     console.error('Erro ao calcular frete:', error)
     shippingError.value = error.message || 'Erro ao calcular taxa.'
-    shippingFee.value = 0 // Garante que o frete fica a zero se houver erro de área
+    shippingFee.value = 0
   } finally {
     isCalculatingShipping.value = false
   }
@@ -731,6 +736,7 @@ const triggerPrinter = async (orderData: unknown) => {
 .delivery-option small { color: #8b837a; font-size: 10px; }
 .payment-block { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
 .payment-shell { background: #faf7f2; border: 1px solid #e6dfd6; border-radius: 14px; padding: 14px; }
+.payment-blocked-notice { padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; color: #991b1b; font-size: 13px; text-align: center; font-weight: 600; }
 #paymentBrick_container { width: 100%; min-height: 420px; display: block; }
 .cart-footer { padding: 18px 28px; background: #fff; border-top: 1px solid #e7e1d8; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
 .delivery-subtotal { display: flex; justify-content: space-between; font-size: 11px; color: #706a62; border-bottom: 1px dashed #e7e1d8; padding-bottom: 6px; }
