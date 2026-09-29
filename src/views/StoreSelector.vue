@@ -216,8 +216,8 @@ const handleCreateStore = async () => {
   if (!newStoreName.value || !newStoreSlug.value) return
   creating.value = true
 
-  // 1. Cadastra o usuário admin no Supabase
-  const { error: signUpError } = await supabase.auth.signUp({
+  // 1. Cadastra o usuário admin no Supabase (mudamos para extrair o 'data' também)
+  const { data: authData, error: signUpError } = await supabase.auth.signUp({
     email: generatedEmail.value,
     password: generatedPassword.value,
   })
@@ -228,10 +228,30 @@ const handleCreateStore = async () => {
     return
   }
 
-  // 2. Insere a loja na tabela `stores`
+  // Descobre o ID do usuário recém-criado
+  let ownerId = authData?.user?.id
+
+  // Se o usuário já existia (erro 422), fazemos login para resgatar o ID dele
+  if (!ownerId) {
+    const { data: signInData } = await supabase.auth.signInWithPassword({
+      email: generatedEmail.value,
+      password: generatedPassword.value,
+    })
+    ownerId = signInData?.user?.id
+  }
+
+  // Trava de segurança: se mesmo assim não tiver ID, paramos por aqui
+  if (!ownerId) {
+    alert('Erro: Não foi possível vincular a loja a um usuário. Tente recarregar a página.')
+    creating.value = false
+    return
+  }
+
+  // 2. Insere a loja na tabela `stores` (Agora enviando o owner_id!)
   const { data: createdStore, error: storeError } = await supabase
     .from('stores')
     .insert([{
+      owner_id: ownerId, // <-- CORREÇÃO: Enviando o ID do dono para o Supabase
       name: newStoreName.value,
       slug: newStoreSlug.value,
       theme_color: newStoreColor.value
