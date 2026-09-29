@@ -758,7 +758,7 @@ const openProductCatalog = () => {
   activeProductForAddon.value = null;
 };
 
-// NOVA LÓGICA DE 1 CLIQUE PARA PRODUTOS SEM ADICIONAIS
+// LÓGICA DE 1 CLIQUE PARA PRODUTOS SEM ADICIONAIS
 const selectProductForAddons = async (prod: Product) => {
   activeProductForAddon.value = prod;
   selectedAddons.value = [];
@@ -771,7 +771,7 @@ const selectProductForAddons = async (prod: Product) => {
   }
 };
 
-// NOVA LÓGICA DE AGRUPAMENTO (QUANTIDADE)
+// LÓGICA DE AGRUPAMENTO (QUANTIDADE)
 const addProductToPendingCart = () => {
   if (!activeProductForAddon.value) return;
 
@@ -853,31 +853,42 @@ const confirmAllPendingItems = async () => {
     subscribeToRealtime(orderId);
   }
 
-  // Prepara os itens incluindo a observação geral para todos!
-  const payloadList = pendingItems.value.map(item => ({
-    order_id: orderId,
-    product_id: item.product_id,
-    product_name: item.product_name,
-    price: item.price,
-    quantity: item.quantity,
-    printed: false,
-    addons_description: item.addons_description,
-    observation: generalObservation.value.trim() || null,
-    selected_options: item.selected_options
-  }));
+  // CORREÇÃO DO ERRO 400: Agrupa a observação no addons_description
+  // e remove a coluna 'observation' para não quebrar o banco de dados.
+  const payloadList = pendingItems.value.map(item => {
+    const obsText = generalObservation.value.trim();
+    let finalDesc = item.addons_description || '';
+
+    if (obsText) {
+      finalDesc = finalDesc ? `${finalDesc} | Obs: ${obsText}` : `Obs: ${obsText}`;
+    }
+
+    return {
+      order_id: orderId,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      price: item.price,
+      quantity: item.quantity,
+      printed: false,
+      addons_description: finalDesc || null,
+      selected_options: item.selected_options
+    };
+  });
 
   const { error } = await supabase.from('order_items').insert(payloadList);
 
   if (!error) {
     pendingItems.value = [];
-    generalObservation.value = ''; // Limpa a observação após o sucesso
+    generalObservation.value = ''; // Limpa a observação
     showCatalogInline.value = false;
     await loadTableConsumption(selectedTable.value.id);
   } else {
     alert('Erro ao lançar itens.');
+    console.error('Erro no Supabase:', error);
   }
 };
 
+// CORREÇÃO DA IMPRESSÃO: Integração com Ngrok
 const printPartialKitchen = async () => {
   const unprintedItems = tableItems.value.filter(item => !item.printed);
 
@@ -908,19 +919,30 @@ const printPartialKitchen = async () => {
   const groupedKitchenItems = groupItemsForPrinting(unprintedItems);
 
   try {
-    await fetch('http://localhost:3000/print-order', {
+    const response = await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': '69420'
+      },
       body: JSON.stringify({
+        storeName: 'Operação de Salão',
         type: 'kitchen',
-        table_number: selectedTable.value?.table_number,
-        customer_name: selectedTable.value?.customer_name || 'Mesa',
-        items: groupedKitchenItems,
-        notes: selectedTable.value?.notes || ''
+        order: {
+          table_number: selectedTable.value?.table_number,
+          customer_name: selectedTable.value?.customer_name || 'Mesa',
+          items: groupedKitchenItems,
+          notes: selectedTable.value?.notes || ''
+        }
       })
     });
+
+    if (response.ok) {
+      console.log('✅ Itens enviados para a cozinha!');
+    }
   } catch (err) {
-    console.warn('Servidor de impressão offline.', err);
+    console.warn('Servidor de impressão (Ngrok) offline.', err);
+    alert('Erro: Servidor de impressão local indisponível.');
   }
 
   if (selectedTable.value) {
@@ -928,25 +950,30 @@ const printPartialKitchen = async () => {
   }
 };
 
+// CORREÇÃO DA IMPRESSÃO: Integração com Ngrok
 const printFullReceipt = async () => {
   if (!selectedTable.value || tableItems.value.length === 0) return;
 
   const groupedReceiptItems = groupItemsForPrinting(tableItems.value);
 
-  const printPayload = {
-    type: 'receipt',
-    table_number: selectedTable.value.table_number,
-    customer_name: selectedTable.value.customer_name || 'Mesa',
-    items: groupedReceiptItems,
-    total: calculateTotal.value,
-    created_at: new Date().toISOString()
-  };
-
   try {
-    const response = await fetch('http://localhost:3000/print-order', {
+    const response = await fetch('https://fragrance-chirpy-broom.ngrok-free.dev/print', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(printPayload)
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': '69420'
+      },
+      body: JSON.stringify({
+        storeName: 'Operação de Salão',
+        type: 'receipt',
+        order: {
+          table_number: selectedTable.value.table_number,
+          customer_name: selectedTable.value.customer_name || 'Mesa',
+          items: groupedReceiptItems,
+          total: calculateTotal.value,
+          created_at: new Date().toISOString()
+        }
+      })
     });
 
     if (response.ok) {
@@ -955,7 +982,7 @@ const printFullReceipt = async () => {
       alert('❌ Falha na impressão da conta.');
     }
   } catch {
-    alert('❌ Não foi possível conectar ao impressor local.');
+    alert('❌ Não foi possível conectar ao impressor local (Ngrok offline).');
   }
 };
 
