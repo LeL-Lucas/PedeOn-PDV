@@ -178,7 +178,7 @@
 
               <div v-if="tableItems.length === 0" class="empty-consumption">
                 <div class="empty-plate">＋</div>
-                <strong>Nenum item lançado</strong>
+                <strong>Nenhum item lançado</strong>
                 <span>Adicione produtos para começar o consumo.</span>
               </div>
 
@@ -252,7 +252,8 @@
               </div>
               <div v-else class="empty-search">Nenhum produto encontrado.</div>
 
-              <div v-if="activeProductForAddon" class="product-config">
+              <!-- Personalização apenas se houver adicionais -->
+              <div v-if="activeProductForAddon && availableAddons.length > 0" class="product-config">
                 <div class="selected-product">
                   <div>
                     <span class="panel-kicker">Personalização</span>
@@ -261,38 +262,43 @@
                   <button @click="activeProductForAddon = null" aria-label="Fechar personalização">×</button>
                 </div>
 
-                <div v-if="availableAddons.length" class="addons">
+                <div class="addons">
                   <label v-for="addon in availableAddons" :key="addon.id" class="addon-option">
                     <input type="checkbox" v-model="selectedAddons" :value="addon" />
                     <span>{{ addon.name }}</span>
                     <strong>+ R$ {{ Number(addon.price).toFixed(2) }}</strong>
                   </label>
                 </div>
-                <p v-else class="no-addon">Nenhum adicional disponível para este produto.</p>
 
-                <label class="observation">
-                  <span>Observação</span>
-                  <input v-model="itemObservation" type="text" placeholder="Ex.: sem cebola, bem passado..." />
-                </label>
-
-                <button class="secondary-btn wide" @click="addProductToPendingCart">Adicionar à prévia</button>
+                <button class="secondary-btn wide" style="margin-top: 14px;" @click="addProductToPendingCart">Adicionar à prévia</button>
               </div>
 
+              <!-- Prévia Fixa (Sticky) -->
               <div v-if="pendingItems.length" class="pending-box">
                 <div class="pending-head">
                   <span>Prévia do lançamento</span>
-                  <strong>{{ pendingItems.length }} item(ns)</strong>
+                  <strong>{{ pendingItems.reduce((acc, item) => acc + item.quantity, 0) }} item(ns)</strong>
                 </div>
-                <div v-for="(pItem, idx) in pendingItems" :key="idx" class="pending-row">
-                  <div>
-                    <strong>{{ pItem.product_name }}</strong>
-                    <span v-if="pItem.addons_description">{{ pItem.addons_description }}</span>
-                  </div>
-                  <div>
-                    <b>R$ {{ Number(pItem.price).toFixed(2) }}</b>
-                    <button @click="removePendingItem(idx)" aria-label="Remover item">×</button>
+
+                <!-- Lista de Itens na Prévia -->
+                <div class="pending-scroll-area">
+                  <div v-for="(pItem, idx) in pendingItems" :key="idx" class="pending-row">
+                    <div>
+                      <strong>{{ pItem.quantity }}x {{ pItem.product_name }}</strong>
+                      <span v-if="pItem.addons_description">{{ pItem.addons_description }}</span>
+                    </div>
+                    <div>
+                      <b>R$ {{ (Number(pItem.price) * pItem.quantity).toFixed(2) }}</b>
+                      <button @click="removePendingItem(idx)" aria-label="Remover item">×</button>
+                    </div>
                   </div>
                 </div>
+
+                <!-- Observação Geral da Comanda -->
+                <div class="general-observation-box">
+                  <input v-model="generalObservation" type="text" placeholder="Observação geral (ex: p/ viagem, sem cebola...)" />
+                </div>
+
                 <button class="primary-btn wide" @click="confirmAllPendingItems">Confirmar lançamento</button>
               </div>
             </section>
@@ -381,7 +387,7 @@ const tables = ref<TableTab[]>([]);
 const storeProducts = ref<Product[]>([]);
 const availableAddons = ref<Addon[]>([]);
 const selectedAddons = ref<Addon[]>([]);
-const itemObservation = ref<string>('');
+const generalObservation = ref<string>(''); // NOVA Observação Geral
 const activeProductForAddon = ref<Product | null>(null);
 const pendingItems = ref<PendingItem[]>([]);
 const tableItems = ref<OrderItem[]>([]);
@@ -618,7 +624,6 @@ const handleTableClick = async (table: TableTab) => {
 };
 
 const loadTableConsumption = async (tableId: number) => {
-  // Busca pedido ativo ignorando apenas pedidos já totalmente encerrados/pagos da comanda
   const { data: orderData, error: orderError } = await supabase
     .from('orders')
     .select('id')
@@ -734,6 +739,7 @@ const closeTableModal = () => {
   tableItems.value = [];
   pendingItems.value = [];
   searchQuery.value = '';
+  generalObservation.value = '';
   selectedCategory.value = 'all';
 };
 
@@ -746,46 +752,57 @@ const openProductCatalog = () => {
   loadAddons();
   pendingItems.value = [];
   searchQuery.value = '';
+  generalObservation.value = '';
   selectedCategory.value = 'all';
   showCatalogInline.value = true;
   activeProductForAddon.value = null;
-  itemObservation.value = '';
 };
 
-const selectProductForAddons = (prod: Product) => {
+// NOVA LÓGICA DE 1 CLIQUE PARA PRODUTOS SEM ADICIONAIS
+const selectProductForAddons = async (prod: Product) => {
   activeProductForAddon.value = prod;
   selectedAddons.value = [];
-  itemObservation.value = '';
-  loadAddons();
+
+  await loadAddons();
+
+  // Se o produto não tem opções, lança imediatamente na prévia
+  if (availableAddons.value.length === 0) {
+    addProductToPendingCart();
+  }
 };
 
+// NOVA LÓGICA DE AGRUPAMENTO (QUANTIDADE)
 const addProductToPendingCart = () => {
   if (!activeProductForAddon.value) return;
 
   const prod = activeProductForAddon.value;
   const addonsTotal = selectedAddons.value.reduce((sum, a) => sum + Number(a.price), 0);
   const finalUnitPrice = Number(prod.price) + addonsTotal;
+  const addonsDesc = selectedAddons.value.map(a => a.name).join(', ') || null;
 
-  let addonsDesc = selectedAddons.value.map(a => a.name).join(', ');
-  if (itemObservation.value.trim()) {
-    addonsDesc = addonsDesc
-      ? `${addonsDesc} (Obs: ${itemObservation.value.trim()})`
-      : `Obs: ${itemObservation.value.trim()}`;
+  // Verifica se o mesmo produto com os mesmos adicionais exatos já está na caixa preta
+  const existingItem = pendingItems.value.find(i =>
+    i.product_id === (prod.id ? String(prod.id) : null) &&
+    i.addons_description === addonsDesc
+  );
+
+  if (existingItem) {
+    // Aumenta a quantidade em vez de criar uma linha nova
+    existingItem.quantity += 1;
+  } else {
+    // Adiciona nova linha
+    pendingItems.value.push({
+      product_id: prod.id ? String(prod.id) : null,
+      product_name: prod.name,
+      price: finalUnitPrice,
+      quantity: 1,
+      addons_description: addonsDesc,
+      selected_options: selectedAddons.value.map(a => ({ name: a.name, price: a.price }))
+    });
   }
-
-  pendingItems.value.push({
-    product_id: prod.id ? String(prod.id) : null,
-    product_name: prod.name,
-    price: finalUnitPrice,
-    quantity: 1,
-    addons_description: addonsDesc || null,
-    observation: itemObservation.value.trim() || undefined,
-    selected_options: selectedAddons.value.map(a => ({ name: a.name, price: a.price }))
-  });
 
   activeProductForAddon.value = null;
   selectedAddons.value = [];
-  itemObservation.value = '';
 };
 
 const removePendingItem = (index: number) => {
@@ -836,6 +853,7 @@ const confirmAllPendingItems = async () => {
     subscribeToRealtime(orderId);
   }
 
+  // Prepara os itens incluindo a observação geral para todos!
   const payloadList = pendingItems.value.map(item => ({
     order_id: orderId,
     product_id: item.product_id,
@@ -844,6 +862,7 @@ const confirmAllPendingItems = async () => {
     quantity: item.quantity,
     printed: false,
     addons_description: item.addons_description,
+    observation: generalObservation.value.trim() || null,
     selected_options: item.selected_options
   }));
 
@@ -851,6 +870,7 @@ const confirmAllPendingItems = async () => {
 
   if (!error) {
     pendingItems.value = [];
+    generalObservation.value = ''; // Limpa a observação após o sucesso
     showCatalogInline.value = false;
     await loadTableConsumption(selectedTable.value.id);
   } else {
@@ -1104,7 +1124,7 @@ input:focus{border-color:#9a978f;box-shadow:0 0 0 3px rgba(154,151,143,.11)}
 .workspace-header p{margin:5px 0 0;color:#7d7f78;font-size:12px}.back-btn{width:34px;height:34px;font-size:19px}
 .customer-pill{padding:5px 9px;border-radius:999px;background:#eeeae3;color:#686a63;font-size:11px;font-weight:700}
 .workspace-grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(420px,1fr) minmax(380px,1fr);gap:1px;background:#ebe6dd}
-.consumption-panel,.catalog-panel{background:#fbfaf7;min-height:0;overflow:auto;padding:24px}
+.consumption-panel,.catalog-panel{background:#fbfaf7;min-height:0;overflow:auto;padding:24px; position:relative;}
 .panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.panel-head h4{margin:4px 0 0;font:800 19px Manrope;letter-spacing:-.02em}
 .items-count{font-size:11px;font-weight:700;color:#888a84}
 .empty-consumption{min-height:260px;border:1px dashed #d9d4ca;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#8b8d86}
@@ -1115,12 +1135,57 @@ input:focus{border-color:#9a978f;box-shadow:0 0 0 3px rgba(154,151,143,.11)}
 .item-main strong{display:block;font-size:13px}.item-main span{display:block;color:#7c7f78;font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:330px}.item-main small{display:inline-block;color:#488061;font-size:10px;margin-top:4px}
 .item-price{font-size:13px;white-space:nowrap}.total-row{border-top:1px solid #e7e2da;margin-top:16px;padding-top:16px;display:flex;justify-content:space-between;align-items:flex-end}.total-row span{font-size:12px;color:#858880}.total-row strong{font:800 25px Manrope}
 .operation-actions{margin-top:18px;display:grid;gap:9px}.wide{width:100%}.operation-subactions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.light-btn{background:#fff;border:1px solid #ded9d1;color:#555951;font-weight:700;font-size:12px}.light-btn:disabled{opacity:.45;cursor:not-allowed}.light-btn.kitchen{color:#8d622d}.light-btn.danger{color:#a6544b}
-.catalog-panel{border-left:1px solid #ebe6dd}.search-box{height:46px;border:1px solid #ddd8cf;background:#fff;border-radius:12px;display:flex;align-items:center;padding:0 12px;gap:8px}.search-box span{font-size:22px;color:#aaa79f}.search-box input{border:0;box-shadow:none;height:44px;padding:0}.search-box button{background:none;cursor:pointer;color:#8a8c85;font-size:18px}
-.category-row{display:flex;gap:7px;overflow:auto;padding:11px 0 3px;scrollbar-width:none}.category-row::-webkit-scrollbar{display:none}.category-row button{white-space:nowrap;border:1px solid #ded9d1;background:#fff;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:700;color:#777970;cursor:pointer}.category-row button.active{background:#252925;color:#fff;border-color:#252925}
-.product-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.picker-item{min-height:66px;padding:11px;text-align:left;background:#fff;border:1px solid #ebe6dd;border-radius:13px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;cursor:pointer}.picker-item:hover{border-color:#bdb8ae;background:#fdfcf9}.picker-item span{font-size:12px;font-weight:700;color:#373b35}.picker-item strong{font-size:11px;white-space:nowrap}.empty-search{padding:30px;text-align:center;color:#8a8c85;font-size:12px}
-.product-config{margin-top:14px;padding:16px;background:#f1eee8;border-radius:16px}.selected-product{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}.selected-product strong{display:block;font-size:14px;margin-top:4px}.selected-product button,.pending-row button{background:none;color:#858880;cursor:pointer;font-size:18px}
-.addons{display:grid;gap:7px}.addon-option{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:10px;border-radius:10px;background:#fff;border:1px solid #e5e0d8}.addon-option input{width:15px;height:15px}.addon-option span{font-size:11px;font-weight:600}.addon-option strong{font-size:10px;color:#8a8c84}.no-addon{font-size:11px;color:#8a8c84}.observation{margin-top:11px}.observation input{height:42px}
-.pending-box{margin-top:14px;background:#252925;color:#fff;border-radius:16px;padding:14px}.pending-head{display:flex;justify-content:space-between;font-size:11px;color:#cdd0c9;margin-bottom:8px}.pending-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.08)}.pending-row strong{font-size:12px;display:block}.pending-row span{font-size:10px;color:#aeb1a9;display:block;margin-top:2px}.pending-row b{font-size:11px}.pending-row button{color:#b6b9b2;margin-left:7px}.pending-box .primary-btn{margin-top:8px;background:#fff;color:#252925;box-shadow:none}
+.catalog-panel{border-left:1px solid #ebe6dd; display:flex; flex-direction:column;}
+.search-box{height:46px;border:1px solid #ddd8cf;background:#fff;border-radius:12px;display:flex;align-items:center;padding:0 12px;gap:8px;flex-shrink:0}.search-box span{font-size:22px;color:#aaa79f}.search-box input{border:0;box-shadow:none;height:44px;padding:0}.search-box button{background:none;cursor:pointer;color:#8a8c85;font-size:18px}
+.category-row{display:flex;gap:7px;overflow:auto;padding:11px 0 3px;scrollbar-width:none;flex-shrink:0}.category-row::-webkit-scrollbar{display:none}.category-row button{white-space:nowrap;border:1px solid #ded9d1;background:#fff;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:700;color:#777970;cursor:pointer}.category-row button.active{background:#252925;color:#fff;border-color:#252925}
+.product-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;margin-bottom:20px;}.picker-item{min-height:66px;padding:11px;text-align:left;background:#fff;border:1px solid #ebe6dd;border-radius:13px;display:flex;justify-content:space-between;align-items:flex-end;gap:8px;cursor:pointer}.picker-item:hover{border-color:#bdb8ae;background:#fdfcf9}.picker-item span{font-size:12px;font-weight:700;color:#373b35}.picker-item strong{font-size:11px;white-space:nowrap}.empty-search{padding:30px;text-align:center;color:#8a8c85;font-size:12px}
+.product-config{margin:14px 0 20px 0;padding:16px;background:#f1eee8;border-radius:16px;flex-shrink:0}.selected-product{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:12px}.selected-product strong{display:block;font-size:14px;margin-top:4px}.selected-product button,.pending-row button{background:none;color:#858880;cursor:pointer;font-size:18px}
+.addons{display:grid;gap:7px}.addon-option{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:10px;border-radius:10px;background:#fff;border:1px solid #e5e0d8}.addon-option input{width:15px;height:15px}.addon-option span{font-size:11px;font-weight:600}.addon-option strong{font-size:10px;color:#8a8c84}.no-addon{font-size:11px;color:#8a8c84}
+
+/* PENDING BOX STICKY CSS */
+.pending-box{
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  margin-top: auto;
+  background: #252925;
+  color: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 -12px 40px rgba(37,41,37,0.18);
+}
+.pending-head{display:flex;justify-content:space-between;font-size:11px;color:#cdd0c9;margin-bottom:12px}
+.pending-scroll-area{max-height: 160px; overflow-y: auto; margin-right: -4px; padding-right: 4px;}
+.pending-scroll-area::-webkit-scrollbar{width: 4px;}
+.pending-scroll-area::-webkit-scrollbar-thumb{background: rgba(255,255,255,0.2); border-radius: 10px;}
+.pending-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid rgba(255,255,255,.08)}.pending-row:first-child{border-top:0;padding-top:0;}
+.pending-row strong{font-size:12px;display:block}.pending-row span{font-size:10px;color:#aeb1a9;display:block;margin-top:2px}.pending-row b{font-size:11px}.pending-row button{color:#b6b9b2;margin-left:7px}
+.pending-box .primary-btn{margin-top:12px;background:#fff;color:#252925;box-shadow:none}
+
+/* GENERAL OBSERVATION */
+.general-observation-box {
+  margin-top: 12px;
+  border-top: 1px dashed rgba(255,255,255,0.15);
+  padding-top: 14px;
+}
+.general-observation-box input {
+  width: 100%;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: white;
+  padding: 0 14px;
+  font-size: 12px;
+}
+.general-observation-box input::placeholder {
+  color: #92958d;
+}
+.general-observation-box input:focus {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.1);
+}
+
 .catalog-launch{grid-column:2;background:#fbfaf7;border:0;border-left:1px solid #ebe6dd;padding:24px;display:flex;align-items:center;gap:14px;text-align:left;cursor:pointer}
 .catalog-plus{width:54px;height:54px;border-radius:16px;background:#efebe4;display:grid;place-items:center;font:500 32px Manrope;color:#777970}.catalog-launch strong{display:block;font:800 16px Manrope}.catalog-launch span{display:block;color:#888a83;font-size:12px;margin-top:4px}.catalog-arrow{margin-left:auto;font-size:21px!important;color:#6c6f68!important}
 .cleaning-panel{margin:auto;max-width:460px;text-align:center;padding:50px}.cleaning-icon{width:68px;height:68px;margin:0 auto 14px;border-radius:22px;background:#ede9e2;display:grid;place-items:center;font-size:26px;color:#7b7d75}.cleaning-panel h4{font:800 20px Manrope;margin:0}.cleaning-panel p{font-size:13px;color:#858880;line-height:1.5;margin:8px 0 20px}
