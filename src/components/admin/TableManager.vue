@@ -213,6 +213,41 @@
       </div>
     </Transition>
 
+    <!-- MODAL: Conta e pagamentos parciais -->
+    <Transition name="modal">
+      <div v-if="showAccountModal && selectedTable" class="modal-overlay account-overlay" @click.self="showAccountModal = false">
+        <div class="modal-card account-card" role="dialog" aria-modal="true" aria-label="Conta da mesa">
+          <div class="account-header">
+            <div><span class="modal-kicker">MESA {{ selectedTable.table_number }}</span><h3>Conta da mesa</h3></div>
+            <button type="button" class="modal-close" aria-label="Fechar conta" @click="showAccountModal = false">×</button>
+          </div>
+          <div class="account-summary">
+            <div><span>Consumo total</span><strong>R$ {{ calculateTotal.toFixed(2) }}</strong></div>
+            <div><span>Já pago</span><strong>R$ {{ paidAmount.toFixed(2) }}</strong></div>
+            <div class="account-balance"><span>Saldo a pagar</span><strong>R$ {{ remainingBalance.toFixed(2) }}</strong></div>
+          </div>
+          <form class="account-payment" @submit.prevent="registerPartialPayment">
+            <label for="account-payment-value">Registrar pagamento parcial (R$)</label>
+            <input id="account-payment-value" v-model="partialPaymentInput" type="text" inputmode="decimal" placeholder="Ex.: 25,00" :disabled="savingPayment || loadingPayments || remainingBalance <= 0" />
+            <p v-if="paymentError" class="account-error" role="alert">{{ paymentError }}</p>
+            <button type="submit" class="btn-confirm" :disabled="savingPayment || loadingPayments || remainingBalance <= 0 || !activeOrderId">
+              {{ savingPayment ? 'Registrando...' : 'Confirmar pagamento' }}
+            </button>
+          </form>
+          <div class="account-history" v-if="partialPayments.length">
+            <strong>Pagamentos registrados</strong>
+            <div v-for="payment in partialPayments" :key="payment.id" class="account-history-item">
+              <span>{{ new Date(payment.created_at).toLocaleString('pt-BR') }}</span>
+              <strong>R$ {{ Number(payment.amount).toFixed(2) }}</strong>
+            </div>
+          </div>
+          <button type="button" class="quick-action quick-action--neutral account-print" @click="printFullReceipt" :disabled="tableItems.length === 0">
+            <span>▤</span> Imprimir consumo
+          </button>
+        </div>
+      </div>
+    </Transition>
+
     <!-- MODAL: Gerenciamento da Mesa -->
     <Transition name="modal">
       <div v-if="selectedTable" class="modal-overlay modal-overlay--workspace" @click.self="closeTableModal">
@@ -284,8 +319,9 @@
 
               <div class="consumption-total">
                 <div>
-                  <span>Total da mesa</span>
-                  <strong>R$ {{ calculateTotal.toFixed(2) }}</strong>
+                  <span>Saldo da mesa</span>
+                  <strong>R$ {{ remainingBalance.toFixed(2) }}</strong>
+                  <small v-if="paidAmount > 0" class="payment-caption">Consumo R$ {{ calculateTotal.toFixed(2) }} · Pago R$ {{ paidAmount.toFixed(2) }}</small>
                 </div>
                 <small>{{ unprintedItemsCount }} item(ns) aguardando envio</small>
               </div>
@@ -298,7 +334,7 @@
                   <span>↗</span> Cozinha
                   <b v-if="unprintedItemsCount">{{ unprintedItemsCount }}</b>
                 </button>
-                <button @click="printFullReceipt" class="quick-action quick-action--neutral" :disabled="tableItems.length === 0">
+                <button @click="openAccountModal" class="quick-action quick-action--neutral" :disabled="tableItems.length === 0">
                   <span>▤</span> Conta
                 </button>
               </div>
@@ -440,6 +476,67 @@ const selectedAddons = ref<Addon[]>([]);
 const activeProductForAddon = ref<Product | null>(null);
 const tableItems = ref<OrderItem[]>([]);
 const activeOrderId = ref<string | null>(null);
+interface TablePartialPayment { id: string; amount: number; created_at: string }
+const showAccountModal = ref(false);
+const partialPaymentInput = ref('');
+const partialPayments = ref<TablePartialPayment[]>([]);
+const savingPayment = ref(false);
+const loadingPayments = ref(false);
+const paymentError = ref('');
+const paidAmount = computed(() => Math.round(partialPayments.value.reduce((total, payment) => total + Number(payment.amount) * 100, 0)) / 100);
+const remainingBalance = computed(() => Math.max(0, Math.round((calculateTotal.value - paidAmount.value) * 100) / 100));
+
+const loadPartialPayments = async (orderId: string | null) => {
+  partialPayments.value = [];
+  if (!orderId) return;
+  loadingPayments.value = true;
+  const { data, error } = await supabase.from('table_partial_payments')
+    .select('id, amount, created_at').eq('order_id', orderId).order('created_at', { ascending: false });
+  loadingPayments.value = false;
+  if (error) {
+    paymentError.value = 'Não foi possível consultar pagamentos. Verifique a migração SQL e as permissões.';
+    return;
+  }
+  partialPayments.value = (data || []) as TablePartialPayment[];
+};
+
+const openAccountModal = async () => {
+  if (!selectedTable.value || !activeOrderId.value) return;
+  paymentError.value = '';
+  partialPaymentInput.value = '';
+  showAccountModal.value = true;
+  await loadPartialPayments(activeOrderId.value);
+};
+
+const registerPartialPayment = async () => {
+  if (!activeOrderId.value || savingPayment.value || loadingPayments.value) return;
+  paymentError.value = '';
+  const normalized = partialPaymentInput.value.trim().replace(/\s/g, '').replace(/^R\$/i, '').replace(',', '.');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+    paymentError.value = 'Informe um valor válido, com no máximo duas casas decimais.';
+    return;
+  }
+  const amountCents = Math.round(Number(normalized) * 100);
+  await loadPartialPayments(activeOrderId.value);
+  if (paymentError.value) return;
+  const balanceCents = Math.round(remainingBalance.value * 100);
+  if (!Number.isSafeInteger(amountCents) || amountCents <= 0 || amountCents > balanceCents) {
+    paymentError.value = 'O pagamento deve ser maior que zero e não pode ultrapassar o saldo da mesa.';
+    return;
+  }
+  savingPayment.value = true;
+  const { error } = await supabase.from('table_partial_payments')
+    .insert({ order_id: activeOrderId.value, amount: amountCents / 100 });
+  savingPayment.value = false;
+  if (error) {
+    paymentError.value = 'Pagamento não registrado: ' + error.message;
+    await loadPartialPayments(activeOrderId.value);
+    return;
+  }
+  partialPaymentInput.value = '';
+  await loadPartialPayments(activeOrderId.value);
+};
+
 const filterStatus = ref<string>('all');
 
 let realtimeChannel: RealtimeChannel | null = null;
@@ -575,10 +672,12 @@ const loadTableConsumption = async (tableId: number) => {
   if (!orderData) {
     tableItems.value = [];
     activeOrderId.value = null;
+    partialPayments.value = [];
     return;
   }
 
   activeOrderId.value = orderData.id;
+  await loadPartialPayments(orderData.id);
 
   const { data: itemsData, error: itemsError } = await supabase
     .from('order_items')
@@ -636,6 +735,9 @@ const closeTableModal = () => {
     supabase.removeChannel(realtimeChannel);
     realtimeChannel = null;
   }
+  showAccountModal.value = false;
+  partialPayments.value = [];
+  paymentError.value = '';
   selectedTable.value = null;
   activeOrderId.value = null;
   tableItems.value = [];
@@ -1403,4 +1505,28 @@ onUnmounted(() => {
   .form-grid { grid-template-columns: 1fr; }
   .workspace-body { gap: 11px; }
 }
+</style>
+
+<style scoped>
+.account-overlay { z-index: 1100; padding: 20px; }
+.account-card { width: min(100%, 440px); padding: 26px; max-height: 90vh; overflow-y: auto; }
+.account-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 22px; }
+.account-header h3 { margin: 8px 0 0; font-size: 24px; }
+.account-summary { display: grid; gap: 12px; margin-bottom: 22px; }
+.account-summary > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account-summary span { color: #686868; font-size: 14px; }
+.account-summary strong { font-size: 17px; }
+.account-summary .account-balance { border-top: 1px solid #e5e5e5; padding-top: 16px; }
+.account-balance strong { color: #237b4b; font-size: 25px; }
+.account-payment { display: grid; gap: 10px; }
+.account-payment label { font-weight: 700; font-size: 13px; }
+.account-payment input { width: 100%; border: 1px solid #d8d8d8; border-radius: 10px; padding: 12px; font: inherit; }
+.account-payment .btn-confirm { width: 100%; }
+.account-error { margin: 0; color: #b42318; font-size: 13px; }
+.account-history { border-top: 1px solid #ececec; margin-top: 22px; padding-top: 18px; display: grid; gap: 10px; }
+.account-history > strong { font-size: 13px; }
+.account-history-item { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #777; }
+.account-history-item strong { color: #222; }
+.account-print { margin-top: 22px; width: 100%; justify-content: center; }
+.payment-caption { display: block; margin-top: 5px; font-size: 11px; }
 </style>
