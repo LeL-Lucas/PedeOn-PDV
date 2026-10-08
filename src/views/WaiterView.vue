@@ -161,8 +161,7 @@
           <div v-if="selectedTable.status === 'cleaning'" class="cleaning-panel">
             <div class="cleaning-icon">✦</div>
             <h4>Mesa aguardando limpeza</h4>
-            <p>Quando estiver tudo pronto, libere a mesa para o próximo atendimento.</p>
-            <button class="primary-btn wide" @click="setTableStatusToFree(selectedTable.id)">Liberar mesa</button>
+            <p>A liberação desta mesa deve ser realizada pela administração.</p>
           </div>
 
           <div v-else class="workspace-grid">
@@ -208,7 +207,6 @@
                     Cozinha <b>{{ unprintedItemsCount }}</b>
                   </button>
                   <button class="light-btn" @click="printFullReceipt" :disabled="tableItems.length === 0">Conta</button>
-                  <button class="light-btn danger" @click="setTableStatusToCleaning(selectedTable.id)">Encerrar</button>
                 </div>
               </div>
             </section>
@@ -1021,24 +1019,6 @@ const confirmOccupyTable = async () => {
   }
 
   showOccupyModal.value = false;
-  await loadTables();
-};
-
-const setTableStatusToCleaning = async (tableId: number) => {
-  if (activeOrderId.value) {
-    await supabase.from('orders').update({ status: 'fechado' }).eq('id', activeOrderId.value);
-  }
-  await supabase.from('tables_tabs').update({ status: 'cleaning', customer_name: null }).eq('id', tableId);
-  closeTableModal();
-  await loadTables();
-};
-
-const setTableStatusToFree = async (tableId: number) => {
-  if (activeOrderId.value) {
-    await supabase.from('orders').update({ status: 'fechado' }).eq('id', activeOrderId.value);
-  }
-  await supabase.from('tables_tabs').update({ status: 'free', customer_name: null }).eq('id', tableId);
-  closeTableModal();
   await loadTables();
 };
 
