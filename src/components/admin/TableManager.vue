@@ -424,7 +424,7 @@
 
 <script setup lang="ts">
 
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onUnmounted, watch } from 'vue';
 import { supabase } from '@/services/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -540,6 +540,53 @@ const registerPartialPayment = async () => {
 const filterStatus = ref<string>('all');
 
 let realtimeChannel: RealtimeChannel | null = null;
+let ordersRealtimeChannel: RealtimeChannel | null = null;
+let tablesRealtimeChannel: RealtimeChannel | null = null;
+let realtimeRefreshSequence = 0;
+
+// Um mesmo painel pode receber eventos de várias mesas. Recarregar o registro
+// selecionado evita perder itens quando a comanda é criada em outro dispositivo.
+const refreshSelectedTable = async () => {
+  const tableId = selectedTable.value?.id;
+  if (tableId == null || selectedTable.value?.status !== 'busy') return;
+  await loadTableConsumption(tableId);
+};
+
+const setupStoreRealtime = () => {
+  if (ordersRealtimeChannel) supabase.removeChannel(ordersRealtimeChannel);
+  if (tablesRealtimeChannel) supabase.removeChannel(tablesRealtimeChannel);
+  ordersRealtimeChannel = null;
+  tablesRealtimeChannel = null;
+  if (!props.storeId) return;
+
+  // Mesma estratégia funcional de OrderManager: escuta todas as mudanças
+  // nos pedidos da loja, inclusive a criação de uma comanda de mesa.
+  ordersRealtimeChannel = supabase
+    .channel(`table-manager:orders:${props.storeId}`)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'orders',
+      filter: `store_id=eq.${props.storeId}`
+    }, async () => {
+      await refreshSelectedTable();
+    })
+    .subscribe();
+
+  // Atualiza o mapa do salão quando a ocupação de uma mesa muda em outra tela.
+  tablesRealtimeChannel = supabase
+    .channel(`table-manager:tables:${props.storeId}`)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'tables_tabs',
+      filter: `company_id=eq.${props.storeId}`
+    }, async () => {
+      await loadTables();
+      if (selectedTable.value) {
+        const latest = tables.value.find(table => table.id === selectedTable.value?.id);
+        if (latest) selectedTable.value = latest;
+        else closeTableModal();
+      }
+    })
+    .subscribe();
+};
 
 const showOpenModal = ref(false);
 const formTableNumber = ref('');
@@ -660,77 +707,73 @@ const handleTableClick = async (table: TableTab) => {
 };
 
 const loadTableConsumption = async (tableId: number) => {
-  const { data: orderData } = await supabase
+  const refreshId = ++realtimeRefreshSequence;
+  const { data: orderData, error: orderError } = await supabase
     .from('orders')
     .select('id')
+    .eq('store_id', props.storeId)
     .eq('table_id', tableId)
     .neq('status', 'concluido')
     .neq('status', 'cancelado')
     .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
+
+  // Ignora respostas antigas se o usuário mudou de mesa durante a consulta.
+  if (refreshId !== realtimeRefreshSequence || selectedTable.value?.id !== tableId) return;
+  if (orderError) {
+    console.error('Erro ao buscar comanda da mesa:', orderError);
+    return; // não apaga a tela em caso de erro de rede
+  }
 
   if (!orderData) {
     tableItems.value = [];
     activeOrderId.value = null;
     partialPayments.value = [];
+    subscribeToRealtime(null);
     return;
   }
 
+  const orderChanged = activeOrderId.value !== orderData.id;
   activeOrderId.value = orderData.id;
-  await loadPartialPayments(orderData.id);
+  if (orderChanged) subscribeToRealtime(orderData.id);
 
   const { data: itemsData, error: itemsError } = await supabase
     .from('order_items')
     .select('*')
     .eq('order_id', orderData.id);
 
-  if (!itemsError && itemsData) {
-    tableItems.value = itemsData as OrderItem[];
-  } else {
-    tableItems.value = [];
+  if (refreshId !== realtimeRefreshSequence || selectedTable.value?.id !== tableId) return;
+  if (itemsError) {
+    console.error('Erro ao buscar itens da mesa:', itemsError);
+    return; // preserva a última comanda exibida
   }
-
-  subscribeToRealtime(orderData.id);
+  tableItems.value = (itemsData || []) as OrderItem[];
+  await loadPartialPayments(orderData.id);
 };
 
 const subscribeToRealtime = (orderId: string | null) => {
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
   }
-
   if (!orderId) return;
 
   realtimeChannel = supabase
-    .channel(`public:order_items:order_id=eq.${orderId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'order_items',
-        filter: `order_id=eq.${orderId}`
-      },
-      (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const newItem = payload.new as OrderItem;
-          if (!tableItems.value.some(i => i.id === newItem.id)) {
-            tableItems.value.push(newItem);
-          }
-        } else if (payload.eventType === 'DELETE') {
-          tableItems.value = tableItems.value.filter(i => i.id !== (payload.old as OrderItem).id);
-        } else if (payload.eventType === 'UPDATE') {
-          const updatedItem = payload.new as OrderItem;
-          const index = tableItems.value.findIndex(i => i.id === updatedItem.id);
-          if (index !== -1) {
-            tableItems.value[index] = updatedItem;
-          }
-        }
-      }
-    )
+    .channel(`table-manager:order-items:${orderId}`)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'order_items',
+      filter: `order_id=eq.${orderId}`
+    }, () => {
+      // Busca a lista inteira como no OrderManager, evitando dados parciais
+      // ou duplicação durante inserts/updates simultâneos.
+      void refreshSelectedTable();
+    })
     .subscribe();
 };
 
 const closeTableModal = () => {
+  realtimeRefreshSequence++;
   if (realtimeChannel) {
     supabase.removeChannel(realtimeChannel);
     realtimeChannel = null;
@@ -776,6 +819,8 @@ const confirmAddProductWithAddons = async () => {
       .eq('table_id', selectedTable.value.id)
       .neq('status', 'concluido')
       .neq('status', 'cancelado')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existingOrder) {
@@ -1020,14 +1065,18 @@ const deleteTablePermanently = async (tableId: number) => {
   loadTables();
 };
 
-onMounted(() => {
-  loadTables();
-});
+watch(() => props.storeId, (storeId) => {
+  if (storeId) {
+    void loadTables();
+    setupStoreRealtime();
+  }
+}, { immediate: true });
 
 onUnmounted(() => {
-  if (realtimeChannel) {
-    supabase.removeChannel(realtimeChannel);
-  }
+  realtimeRefreshSequence++;
+  if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+  if (ordersRealtimeChannel) supabase.removeChannel(ordersRealtimeChannel);
+  if (tablesRealtimeChannel) supabase.removeChannel(tablesRealtimeChannel);
 });
 
 </script>
